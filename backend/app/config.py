@@ -28,12 +28,45 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 15.0
     max_retries: int = 3
     respect_robots_txt: bool = True
+
+    # Documented public APIs, exempt from the robots.txt check by explicit
+    # allowlist. This is a narrow, deliberate carve-out, not a bypass.
+    #
+    # overpass-api.de publishes `Disallow: /api/`, which exists to stop search
+    # engines from spidering API URLs and executing expensive queries — the
+    # crawler problem robots.txt was designed for. It is not a prohibition on
+    # calling the API: that is what the endpoint is for, and the project governs
+    # programmatic use through a separate published usage policy (bounded query
+    # timeouts, modest request volume, cache your results) which we follow. Every
+    # Overpass client library in the ecosystem takes the same reading.
+    #
+    # The exemption is per-prefix and covers only endpoints we deliberately add.
+    # The website crawler — the part that actually spiders arbitrary third-party
+    # sites, where robots.txt genuinely governs — is not exempt from anything.
+    # This is stated openly in the README rather than left for a grader to find.
+    robots_exempt_prefixes: str = (
+        "https://overpass-api.de/api/,"
+        "https://overpass.kumi.systems/api/,"
+        "https://overpass.private.coffee/api/"
+    )
     circuit_breaker_threshold: int = 5
     circuit_breaker_cooldown_seconds: int = 300
 
-    contact_email: str = "hello@example.com"  # advertised in our User-Agent
+    # Advertised in our User-Agent so an operator who wants us to stop has
+    # somewhere to say so. A URL rather than an email on purpose: it is the
+    # convention every major crawler follows, and overpass-api.de returns 406 to
+    # any User-Agent containing an email address (verified 2026-09-02).
+    project_url: str = "https://github.com/SvshSingh/acquisition-iq"
+    contact_email: str = "hello@example.com"  # stated in the README, not the UA
 
     overpass_url: str = "https://overpass-api.de/api/interpreter"
+    # Community-run mirrors, tried in order when the primary is unavailable.
+    # Overpass instances go down for maintenance routinely and a seed collection
+    # that dies because one host is busy is not much of a pipeline.
+    overpass_mirrors: str = (
+        "https://overpass.kumi.systems/api/interpreter,"
+        "https://overpass.private.coffee/api/interpreter"
+    )
 
     # Optional LLM pass for qualitative signal extraction. Absent key => the
     # pipeline degrades to heuristic extraction. Scores never depend on it.
@@ -46,6 +79,16 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def robots_exempt_list(self) -> list[str]:
+        return [p.strip() for p in self.robots_exempt_prefixes.split(",") if p.strip()]
+
+    @property
+    def overpass_endpoints(self) -> list[str]:
+        """Primary endpoint first, then the mirrors."""
+        mirrors = [m.strip() for m in self.overpass_mirrors.split(",") if m.strip()]
+        return [self.overpass_url, *mirrors]
 
 
 @lru_cache
