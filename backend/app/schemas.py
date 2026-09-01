@@ -105,6 +105,19 @@ class FactorResult(BaseModel):
         default_factory=list,
         description="Signals we looked for and did not find. Drives the confidence flag.",
     )
+    measured: bool = Field(
+        default=True,
+        description=(
+            "Whether this score is a measurement or a fallback prior. The "
+            "distinction decides whether the factor earns its weight: an absence "
+            "is sometimes the finding and sometimes just ignorance. Finding no "
+            "way to contact a company is a real result — that lead is "
+            "unreachable, and 0 is the right score. Finding no headcount "
+            "published anywhere says nothing about the company at all, and any "
+            "number we put there is invented. Only the first kind should move a "
+            "ranking."
+        ),
+    )
 
     @property
     def is_low_confidence(self) -> bool:
@@ -244,13 +257,32 @@ class Company(BaseModel):
 
 
 class ScoreResult(BaseModel):
-    """The output the whole product exists to produce."""
+    """The output the whole product exists to produce.
+
+    Two sets of weights travel together, and the distinction matters:
+
+    * `weights` is what the user asked for — their thesis, unaltered.
+    * `effective_weights` is what was actually applied. A factor that found no
+      evidence at all contributes nothing and its weight is redistributed across
+      the factors that did, so the headline number answers "how good is this
+      target, judged on what we could actually observe" rather than being
+      dragged toward a constant by a signal no source publishes.
+
+    `covered_weight` is the share of the user's declared thesis that had evidence
+    behind it. It is the honesty gauge: a 78 scored on 40% of the thesis is a
+    different claim from a 78 scored on 95% of it, and the UI shows both.
+    Confidence is deliberately computed against the *declared* weights, so
+    missing coverage still drags it down — otherwise redistributing would make a
+    thinly-evidenced company look more certain, which is backwards.
+    """
 
     company_id: str
     score: float = Field(ge=0.0, le=100.0)
     confidence: Confidence
     factors: list[FactorResult]
     weights: FactorWeights
+    effective_weights: dict[FactorKey, float] = Field(default_factory=dict)
+    covered_weight: float = Field(default=1.0, ge=0.0, le=1.0)
     scored_at: datetime
     engine_version: str
 
@@ -258,12 +290,18 @@ class ScoreResult(BaseModel):
     def factor_map(self) -> dict[FactorKey, FactorResult]:
         return {f.key: f for f in self.factors}
 
+    @property
+    def uncovered_factors(self) -> list[FactorKey]:
+        """Factors that found no evidence and were therefore not scored on."""
+        return [f.key for f in self.factors if not f.evidence]
+
     def contribution(self, key: FactorKey) -> float:
         """Points this factor contributed to the headline score."""
         f = self.factor_map.get(key)
         if f is None:
             return 0.0
-        return f.score * self.weights.as_map()[key]
+        applied = self.effective_weights or self.weights.as_map()
+        return f.score * applied.get(key, 0.0)
 
 
 class ScoredCompany(BaseModel):

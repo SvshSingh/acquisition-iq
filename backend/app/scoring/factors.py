@@ -99,7 +99,15 @@ def _result(
     score: float,
     evidence: list[Evidence],
     missing: list[str],
+    *,
+    measured: bool | None = None,
 ) -> FactorResult:
+    """Build a factor result.
+
+    `measured` defaults to "did we observe anything?" — which is right for most
+    factors, because with no observations the score is just the prior. Factors
+    where an absence is itself the finding pass it explicitly.
+    """
     return FactorResult(
         key=key,
         label=FACTOR_LABELS[key],
@@ -107,6 +115,7 @@ def _result(
         confidence=_confidence(len(evidence), len(missing)),
         evidence=evidence,
         missing_signals=missing,
+        measured=bool(evidence) if measured is None else measured,
     )
 
 
@@ -483,11 +492,15 @@ def score_contactability(company: Company) -> FactorResult:
     score = 0.0
 
     if not company.contacts:
+        # Measured, emphatically. "We found no way to reach this business" is a
+        # finding about the lead, not a gap in our data, and a searcher should
+        # see it rank accordingly rather than have the factor quietly excused.
         return _result(
             FactorKey.CONTACTABILITY,
             0.0,
             [],
             ["email address", "phone number", "named contact"],
+            measured=True,
         )
 
     best = company.primary_contact

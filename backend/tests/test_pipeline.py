@@ -35,7 +35,7 @@ from app.pipeline.scrapers.overpass import (
 from app.schemas import Company
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from collect_seed import annotate_peer_density, haversine_km  # noqa: E402
+from collect_seed import annotate_peer_density, haversine_km
 
 NOW = datetime(2026, 9, 2, tzinfo=UTC)
 
