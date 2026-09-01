@@ -18,7 +18,6 @@ import argparse
 import asyncio
 import json
 import logging
-import math
 import sys
 from collections import Counter
 from datetime import UTC, datetime
@@ -28,6 +27,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.cache.base import NullCache
+from app.pipeline.dedupe import annotate_chain_locations, deduplicate
+from app.pipeline.geo import haversine_km
 from app.pipeline.scrapers.http import PoliteClient
 from app.pipeline.scrapers.overpass import (
     COLUMBUS_OH_BBOX,
@@ -35,6 +36,7 @@ from app.pipeline.scrapers.overpass import (
     OverpassClient,
 )
 from app.pipeline.scrapers.website import crawl_site
+from app.pipeline.validate import MxResolver, validate_contacts
 from app.schemas import Company
 from app.scoring.engine import score_company
 
@@ -45,15 +47,6 @@ logger = logging.getLogger("collect_seed")
 # same trade genuinely compete for the same customer, and therefore the distance
 # over which a roll-up thesis makes sense.
 PEER_RADIUS_KM = 15.0
-EARTH_RADIUS_KM = 6371.0
-
-
-def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = p2 - p1
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
 def annotate_peer_density(companies: list[Company], radius_km: float = PEER_RADIUS_KM) -> None:
@@ -119,11 +112,19 @@ async def enrich(
         if contacts and not company.contacts:
             company.contacts = contacts
         elif contacts and company.contacts:
-            # Merge: OSM often has the phone, the site usually has the mailbox.
-            existing = company.contacts[0]
-            found = contacts[0]
-            if not existing.email and found.email:
-                company.contacts[0] = existing.model_copy(update={"email": found.email})
+            # Merge rather than replace: the two sources are complementary. OSM
+            # usually carries the phone number, the website usually carries the
+            # mailbox, and only the website ever names the owner.
+            existing, found = company.contacts[0], contacts[0]
+            merged = {
+                field: getattr(found, field)
+                for field in ("email", "name", "title")
+                if not getattr(existing, field) and getattr(found, field)
+            }
+            if found.is_decision_maker:
+                merged["is_decision_maker"] = True
+            if merged:
+                company.contacts[0] = existing.model_copy(update=merged)
         company.last_refreshed = datetime.now(UTC)
         done += 1
         if done % 25 == 0:
@@ -153,6 +154,22 @@ async def collect(limit: int, *, use_cache: bool) -> dict[str, object] | None:
             logger.error("no companies discovered; aborting without writing")
             return None
 
+        # Dedupe before anything expensive: crawling the same site twice is
+        # wasted politeness budget as well as wasted time.
+        result = deduplicate(companies)
+        if result.removed:
+            logger.info("merged %d duplicate records", result.removed)
+            for match in result.matches[:10]:
+                logger.info("  %s <- %s (%s)", match.kept_id, match.dropped_id, match.reason)
+        companies = result.companies
+
+        # Both of these read the *whole* discovered set, not the slice we keep.
+        # Peer density and chain size are properties of the neighbourhood, and
+        # measuring them over a truncated sample would understate both.
+        annotate_peer_density(companies)
+        chains = annotate_chain_locations(companies)
+        logger.info("flagged %d companies as multi-location chains", chains)
+
         # Prefer companies with a website: they are the ones the crawler can say
         # anything about, and a seed set of blank records demos nothing. Some
         # site-less companies are kept deliberately so the UI has to handle the
@@ -168,8 +185,18 @@ async def collect(limit: int, *, use_cache: bool) -> dict[str, object] | None:
             sum(1 for c in selected if not c.website),
         )
 
-        annotate_peer_density(companies)  # density over the full set, not the slice
         await enrich(client, selected)
+
+    # Validation last, once every source has contributed what it has. Running it
+    # earlier would mean validating an OSM phone number and then discarding the
+    # verdict when the website turns up a better contact.
+    resolver = MxResolver()
+    validated = 0
+    for company in selected:
+        if company.contacts:
+            company.contacts = await validate_contacts(company.contacts, resolver)
+            validated += 1
+    logger.info("validated contacts for %d companies", validated)
 
     scored = [(c, score_company(c)) for c in selected]
     scored.sort(key=lambda pair: pair[1].score, reverse=True)

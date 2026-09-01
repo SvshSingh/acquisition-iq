@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 from app.schemas import (
     FACTOR_LABELS,
+    ROLE_LOCALPARTS,
     BuyBox,
     Company,
     Confidence,
@@ -64,11 +65,6 @@ _MODERN_STACK = {
 _LEGACY_STACK = {
     "frontpage", "dreamweaver", "wordpress 4", "joomla", "flash", "jquery 1",
     "table-layout", "godaddy website builder",
-}
-
-_ROLE_LOCALPARTS = {
-    "info", "contact", "sales", "support", "hello", "admin", "office", "enquiries",
-    "inquiries", "help", "team", "mail", "service",
 }
 
 _DECISION_TITLES = re.compile(
@@ -216,6 +212,24 @@ def score_succession(company: Company, *, today: datetime | None = None) -> Fact
 
     if founded is None:
         missing.append("founding year")
+
+    # A branch network has no retiring owner to sell it, which is the whole
+    # premise of the thesis. This catches what the text patterns cannot: GEICO's
+    # page says nothing about ownership, but trading under one name at fourteen
+    # premises in a single metro says everything.
+    siblings = company.sibling_location_count
+    if siblings is not None and siblings >= 3:
+        score -= 32.0
+        evidence.append(
+            Evidence(
+                label="Multi-location chain",
+                detail=f"Trades under this name at {siblings} separate premises in "
+                "this metro — a chain or franchise network rather than an "
+                "owner-operated business.",
+                source_url=company.source_url,
+                impact=-32.0,
+            )
+        )
 
     for pattern, label in _PE_PATTERNS:
         match = pattern.search(text)
@@ -508,16 +522,23 @@ def score_contactability(company: Company) -> FactorResult:
 
     if best.email:
         localpart = best.email.split("@", 1)[0].lower()
-        is_role = localpart in _ROLE_LOCALPARTS
+        is_role = localpart in ROLE_LOCALPARTS
         if best.email_status is VerificationStatus.VERIFIED:
             impact = 30.0 if not is_role else 20.0
             detail = (
-                "Deliverable mailbox confirmed by MX lookup."
+                # Precise on purpose. MX presence proves the domain accepts mail;
+                # it says nothing about this particular mailbox, and the only way
+                # to learn that is to open an SMTP session under false pretences.
+                # Claiming more than we checked is the failure mode this product
+                # is pitched against.
+                "Domain publishes a live mail exchanger and the address is "
+                "well-formed. Mailbox existence not probed."
                 if not is_role
-                else "Deliverable, but a shared role address rather than a person."
+                else "Domain accepts mail, but this is a shared role address "
+                "rather than a named person."
             )
         elif best.email_status is VerificationStatus.RISKY:
-            impact, detail = 12.0, "Domain accepts all mail — deliverability unconfirmed."
+            impact, detail = 12.0, "No MX record or a throwaway provider — delivery is doubtful."
         elif best.email_status is VerificationStatus.INVALID:
             impact, detail = -10.0, "Address failed validation and will bounce."
         else:

@@ -32,7 +32,8 @@ from app.pipeline.scrapers.overpass import (
     build_query,
     element_to_company,
 )
-from app.schemas import Company
+from app.pipeline.validate import normalise_phone, validate_contact, verify_email
+from app.schemas import Company, Contact, VerificationStatus
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from collect_seed import annotate_peer_density, haversine_km
@@ -439,3 +440,141 @@ def test_peer_density_left_none_without_coordinates():
     annotate_peer_density(companies)
     assert companies[0].peer_count_in_niche is None
     assert companies[1].peer_count_in_niche == 0
+
+
+# --------------------------------------------------------------------------- #
+# decision maker extraction
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Meet Dale Whitaker, Owner of Whitaker Heating.", ("Dale Whitaker", "Owner")),
+        ("Owner: Dr. Susan Chen", ("Dr. Susan Chen", "Owner")),
+        ("John Smith - General Manager", ("John Smith", "General Manager")),
+        # Typeset dashes and curled apostrophes are the normal case on a real
+        # CMS-built page, not an edge case.
+        ("Maria O\u2019Brien \u2014 Practice Manager", ("Maria O\u2019Brien", "Practice Manager")),
+        ("Dale Whitaker \u2013 Owner", ("Dale Whitaker", "Owner")),
+        ("Founder \u2014 Anne Kowalski", ("Anne Kowalski", "Founder")),
+    ],
+)
+def test_decision_maker_extracted(text, expected):
+    assert website._extract_decision_maker(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Contact Us, Owner",          # nav chrome shaped like a name
+        "Columbus Ohio, Owner",       # place name
+        "Our Team, Owner",
+        "no titles here at all",
+    ],
+)
+def test_non_names_are_rejected(text):
+    """A false decision maker is worse than none: it puts a stranger's name in
+    front of a user about to send outreach."""
+    assert website._extract_decision_maker(text) is None
+
+
+# --------------------------------------------------------------------------- #
+# contact validation
+# --------------------------------------------------------------------------- #
+
+class StubResolver:
+    """Stands in for DNS. `mx` maps domain -> hosts list, [] or None."""
+
+    def __init__(self, mx: dict[str, list[str] | None], exists: dict[str, bool] | None = None):
+        self._mx = mx
+        self._exists = exists or {}
+
+    async def mx_hosts(self, domain: str) -> list[str] | None:
+        return self._mx.get(domain, [])
+
+    async def domain_exists(self, domain: str) -> bool | None:
+        return self._exists.get(domain, True)
+
+
+async def test_malformed_address_is_invalid():
+    verdict = await verify_email("not-an-email", StubResolver({}))  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.INVALID
+
+
+async def test_live_mx_verifies_the_domain_only():
+    resolver = StubResolver({"whitakerhvac.com": ["mail.whitakerhvac.com"]})
+    verdict = await verify_email("dale@whitakerhvac.com", resolver)  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.VERIFIED
+    assert not verdict.is_role
+    # The claim must stop at the domain. Saying more than was checked is the
+    # exact dishonesty this product is pitched against.
+    assert any("not probed" in r for r in verdict.reasons)
+
+
+async def test_nonexistent_domain_is_invalid():
+    resolver = StubResolver({"gone.example": []}, exists={"gone.example": False})
+    verdict = await verify_email("someone@gone.example", resolver)  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.INVALID
+
+
+async def test_no_mx_but_domain_resolves_is_risky_not_invalid():
+    """RFC 5321 falls back to the A record, and small businesses rely on it."""
+    resolver = StubResolver({"amx.example": []}, exists={"amx.example": True})
+    verdict = await verify_email("a@amx.example", resolver)  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.RISKY
+
+
+async def test_dns_failure_is_unknown_not_invalid():
+    """'We could not find out' must never be recorded as 'this will bounce'."""
+    resolver = StubResolver({"timeout.example": None})
+    verdict = await verify_email("a@timeout.example", resolver)  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.UNKNOWN
+
+
+async def test_disposable_provider_is_risky():
+    verdict = await verify_email("x@mailinator.com", StubResolver({}))  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.RISKY
+
+
+async def test_role_address_is_flagged_but_still_verified():
+    resolver = StubResolver({"acme.example": ["mx.acme.example"]})
+    verdict = await verify_email("info@acme.example", resolver)  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.VERIFIED
+    assert verdict.is_role
+
+
+async def test_free_mail_is_noted_but_not_penalised():
+    """A gmail address on a local business is normal, not a defect."""
+    resolver = StubResolver({"gmail.com": ["gmail-smtp-in.l.google.com"]})
+    verdict = await verify_email("dale.whitaker@gmail.com", resolver)  # type: ignore[arg-type]
+    assert verdict.status is VerificationStatus.VERIFIED
+    assert verdict.is_free_mail
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected", "valid"),
+    [
+        # libphonenumber validates format and prefix, not reachability, so a
+        # 555 fiction number passes. That is the right boundary for this field:
+        # phone_valid means "dialable as written", not "someone answers".
+        ("(614) 555-0142", "+16145550142", True),
+        ("+1 614 220 4000", "+16142204000", True),
+        ("614.220.4000", "+16142204000", True),
+        ("not a phone", None, False),
+        ("12", None, False),
+    ],
+)
+def test_phone_normalisation(raw, expected, valid):
+    normalised, is_valid = normalise_phone(raw)
+    assert normalised == expected
+    assert is_valid == valid
+
+
+async def test_validate_contact_fills_in_verdicts():
+    resolver = StubResolver({"acme.example": ["mx.acme.example"]})
+    contact = Contact(email="Dale@Acme.Example", phone="(614) 220-4000")
+    result = await validate_contact(contact, resolver)  # type: ignore[arg-type]
+    assert result.email == "dale@acme.example", "normalised to lowercase"
+    assert result.email_status is VerificationStatus.VERIFIED
+    assert result.phone == "+16142204000", "normalised to E.164"
+    assert result.phone_valid is True

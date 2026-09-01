@@ -93,6 +93,48 @@ _PE_SENTENCE = re.compile(
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
+# Decision makers, as they are actually written on an about page. Two spellings
+# cover almost everything: "Dale Whitaker, Owner" and "Owner: Dale Whitaker".
+# Reaching the person who can actually sell the business is worth 30 points in
+# the contactability factor, and it is the difference between a lead and a name.
+_TITLE_WORDS = (
+    r"Owner|Co-?Owner|Founder|Co-?Founder|President|CEO|Principal|Proprietor"
+    r"|General Manager|Managing (?:Director|Partner)|Practice Manager"
+)
+# The non-ASCII characters below are load-bearing, not typos. Real about pages
+# are written in a CMS that curls apostrophes and turns hyphens into dashes, so
+# matching only the ASCII forms would miss "O'Brien" and "Dale Whitaker - Owner"
+# in their real, typeset spellings — exactly the strings this exists to catch.
+#
+# The surname class allows an interior capital so that O'Brien, McCarthy and
+# Smith-Jones survive; restricting it to lowercase silently drops every name
+# with one, which is a lot of them.
+_NAME = r"(?:Dr\.?\s+|Mr\.?\s+|Mrs\.?\s+|Ms\.?\s+)?[A-Z][a-z]{1,20}(?:\s+[A-Z]\.)?\s+[A-Z][A-Za-z'’-]{1,24}"  # noqa: RUF001
+
+_PERSON_THEN_TITLE = re.compile(rf"\b({_NAME})\s*[,\-–—]\s*({_TITLE_WORDS})\b")  # noqa: RUF001
+_TITLE_THEN_PERSON = re.compile(rf"\b({_TITLE_WORDS})\s*[:\-–—]\s*({_NAME})\b")  # noqa: RUF001
+
+# Words that pass the "two capitalised tokens" shape but are not people. Without
+# this, "Columbus Ohio, Owner" and "Contact Us, Owner" become decision makers.
+_NOT_A_NAME = re.compile(
+    r"\b(Columbus|Ohio|Contact|About|Home|Services|Team|Our|The|Us|Call|Email|Phone"
+    r"|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Company|Business"
+    r"|Center|Centre|Group|Inc|LLC|Suite|Street|Avenue|Road)\b",
+    re.I,
+)
+
+
+def _extract_decision_maker(text: str) -> tuple[str, str] | None:
+    """Find a named owner or principal. Returns `(name, title)` or None."""
+    for pattern, name_first in ((_PERSON_THEN_TITLE, True), (_TITLE_THEN_PERSON, False)):
+        for match in pattern.finditer(text):
+            name = (match.group(1) if name_first else match.group(2)).strip()
+            title = (match.group(2) if name_first else match.group(1)).strip()
+            if _NOT_A_NAME.search(name):
+                continue
+            return " ".join(name.split()), title
+    return None
+
 
 def _visible_text(tree: HTMLParser) -> str:
     """Page text with script, style and nav chrome removed.
@@ -206,14 +248,18 @@ def _extract_contacts(text: str, html: str) -> list[Contact]:
         if not e.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".css", ".js"))
     ]
     phones = list(dict.fromkeys(m.group(0) for m in _PHONE.finditer(text)))
-    if not emails and not phones:
+    person = _extract_decision_maker(text)
+    if not emails and not phones and not person:
         return []
     return [
         Contact(
+            name=person[0] if person else None,
+            title=person[1] if person else None,
             email=emails[0] if emails else None,
             email_status=VerificationStatus.UNKNOWN,
             phone=phones[0] if phones else None,
             phone_valid=None,
+            is_decision_maker=person is not None,
         )
     ]
 

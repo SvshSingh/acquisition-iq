@@ -60,6 +60,18 @@ FACTOR_DESCRIPTIONS: dict[FactorKey, str] = {
 }
 
 
+# Shared between the validator (which flags them) and the contactability factor
+# (which discounts them). One definition, because the two drifting apart would
+# mean the UI explaining a penalty the scorer did not actually apply.
+ROLE_LOCALPARTS: frozenset[str] = frozenset(
+    {
+        "info", "contact", "sales", "support", "hello", "admin", "office",
+        "enquiries", "inquiries", "help", "team", "mail", "service", "billing",
+        "accounts", "noreply", "no-reply", "webmaster", "postmaster",
+    }
+)
+
+
 class Confidence(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
@@ -230,6 +242,16 @@ class Company(BaseModel):
 
     # Populated by the fragmentation factor's neighbourhood query.
     peer_count_in_niche: int | None = None
+
+    sibling_location_count: int | None = Field(
+        default=None,
+        description=(
+            "How many locations trade under this name in the same metro. Three "
+            "or more means a chain or franchise network, which is the one thing "
+            "a search fund definitively cannot buy — there is no retiring owner "
+            "to sell it. Measured across the dataset, not asserted per record."
+        ),
+    )
 
     source: str = "unknown"
     source_url: str | None = None
