@@ -211,7 +211,42 @@ function FiledFacts({ company }: { company: ScoredCompany["company"] }) {
           Verify on the licensing board →
         </a>
       ) : null}
+
+      {company.website ? <WebsiteProvenance company={company} /> : null}
     </section>
+  );
+}
+
+/** Where the website came from, and how sure we are.
+ *
+ *  No source publishes a URL for a licensed contractor, so most of these were
+ *  derived from the business name and then proved against the page itself.
+ *  Presenting an inferred link with the same confidence as a published one
+ *  would be the quiet dishonesty this product exists to avoid, so the proof is
+ *  shown rather than implied. */
+function WebsiteProvenance({ company }: { company: ScoredCompany["company"] }) {
+  const inferred = company.website_source?.startsWith("inferred");
+  const conclusive = company.website_source === "inferred:phone";
+
+  return (
+    <div className="mt-4 border-t border-[var(--color-rule)] pt-3">
+      <a
+        href={company.website ?? undefined}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="block truncate text-[12.5px] text-[var(--color-accent-ink)] underline decoration-dotted underline-offset-2"
+      >
+        {company.website?.replace(/^https?:\/\//, "")}
+      </a>
+      {inferred ? (
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-ink-faint)]">
+          <span className="font-medium">
+            {conclusive ? "Matched by phone number" : "Matched by name and city"}
+          </span>
+          {company.website_evidence ? ` — ${company.website_evidence}` : null}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

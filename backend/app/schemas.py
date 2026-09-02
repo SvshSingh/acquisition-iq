@@ -222,6 +222,19 @@ class Company(BaseModel):
     name: str
     domain: str | None = None
     website: str | None = None
+    website_source: str | None = Field(
+        default=None,
+        description=(
+            "How the website was established: a source that published it, or "
+            "'inferred:phone' / 'inferred:name' where it was derived from the "
+            "business name and then proved. Websites are not equally certain and "
+            "the UI must not present them as though they were."
+        ),
+    )
+    website_evidence: str | None = Field(
+        default=None,
+        description="The proof that this site belongs to this company.",
+    )
     industry: str | None = None
     naics: str | None = None
     city: str | None = None

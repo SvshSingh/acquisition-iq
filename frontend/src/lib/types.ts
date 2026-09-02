@@ -64,6 +64,10 @@ export interface Company {
   name: string;
   domain: string | null;
   website: string | null;
+  /** How the website was established — a source that published it, or
+   *  "inferred:phone" / "inferred:name" where it was derived and then proved. */
+  website_source: string | null;
+  website_evidence: string | null;
   industry: string | null;
   city: string | null;
   state: string | null;
