@@ -1,21 +1,23 @@
 """Markets the collector can run against.
 
 A market is a parameter, never a constant baked into a query. The first version
-of this pipeline hardcoded one bounding box, and the cost of that showed up
-immediately: "does this generalise?" is the first question anyone asks of a
-scraper, and the honest answer has to be a second market collected by the same
-code path rather than an assurance.
+of this pipeline hardcoded one bounding box, which made "does this generalise?"
+unanswerable without a rewrite.
 
 Each market carries what both discovery sources need — a bounding box for
-OpenStreetMap, and a state/county pair for the licensing boards — so adding a
-market is a data change, not a code change.
+OpenStreetMap, a state and county for the licensing boards, and the OSM tag set
+appropriate to it — so adding a market is a data change, not a code change.
+
+Only Glendale ships as a committed dataset. Columbus is defined and runnable but
+deliberately not collected; see the note above it for why the two would not be
+comparable even if it were.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.pipeline.scrapers.overpass import BoundingBox
+from app.pipeline.scrapers.overpass import TRADE_TAGS, BoundingBox
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,11 @@ class Market:
     # the granularity licensing boards publish, then this narrows to the metro
     # a searcher would actually drive around in a day.
     core_cities: tuple[str, ...] = field(default_factory=tuple)
+    # Which OSM tags to ask for. A market with no licence register has to get
+    # its whole population from the map, and the trade tags are too sparse in
+    # the US to carry that alone — so such markets widen to the verticals OSM
+    # actually covers rather than returning a dozen rows.
+    osm_tags: dict[str, str] | None = None
 
     def is_core(self, city: str | None) -> bool:
         if not self.core_cities:
@@ -57,10 +64,20 @@ GLENDALE = Market(
     ),
 )
 
-# The second market exists to prove the collector generalises, and to test the
-# counter-thesis: search-fund returns are argued to be better in secondary
-# Midwest markets, where there is less aggregator competition. If the scorer is
-# working, LA targets should skew more consolidated than Columbus ones.
+# A second market, supported but not shipped as a committed dataset.
+#
+# It exists to keep the market genuinely parameterised rather than to pad the
+# submission: `--market columbus` runs the same code path end to end and returns
+# a real result. What it cannot do is compare like with like. Ohio licenses
+# contractors through a different board with its own acquisition problem, so
+# there is no licence register behind this market, and the OSM trade tags that
+# would stand in for one return roughly a dozen businesses across the whole
+# metro (measured, not assumed — see `sources/osm.py`).
+#
+# So it widens to the verticals OSM does cover well in the US: veterinary,
+# dental, auto repair, self-storage and the rest. Those are legitimate ETA
+# targets, but they are a different buy box from the California trades, and the
+# README says so rather than implying two comparable datasets.
 COLUMBUS = Market(
     key="columbus",
     label="Columbus, OH",
@@ -68,6 +85,7 @@ COLUMBUS = Market(
     state="OH",
     counties=("Franklin",),
     core_cities=(),
+    osm_tags=TRADE_TAGS,
 )
 
 MARKETS: dict[str, Market] = {m.key: m for m in (GLENDALE, COLUMBUS)}

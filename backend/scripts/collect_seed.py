@@ -7,10 +7,12 @@ Run once per market, commit the output. The demo then loads instantly and never
 depends on a third-party API being up while someone is watching — but the same
 code path runs live behind "Refresh from source", so nothing here is a mock.
 
-The market is a parameter, not a constant. That is the point: "does this
-generalise beyond one city?" is the first question anyone asks of a scraper, and
-the honest answer is a second market collected by the same script rather than an
-assurance that it would work.
+The market is a parameter, not a constant, so "does this generalise beyond one
+city?" is answered by running the flag rather than by rewriting the collector.
+Glendale is the market that ships as a committed dataset; Columbus is defined
+and runnable but not collected, because Ohio has no equivalent licence register
+and the two would not be comparing like with like. `markets.py` says so at the
+definition rather than leaving it to be inferred.
 
 Two sources feed it, because they are good at opposite things. Licence registers
 publish structure — ownership form, issue date, whether anyone is employed — on
@@ -220,8 +222,9 @@ async def collect(market: Market, limit: int, *, use_cache: bool) -> dict[str, o
     # this has to run from a clean clone with no database up.
     async with PoliteClient(cache=None if use_cache else NullCache()) as client:
         licensed = await CslbSource().discover(market)
+        osm_tags = market.osm_tags or HOME_SERVICES_TAGS
         mapped = await OverpassSource(
-            client, HOME_SERVICES_TAGS, use_cache=use_cache
+            client, osm_tags, use_cache=use_cache
         ).discover(market)
 
         if licensed:
