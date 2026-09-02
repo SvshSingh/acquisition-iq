@@ -33,7 +33,11 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
+import dns.asyncresolver
+import dns.exception
+import dns.resolver
 from selectolax.parser import HTMLParser
 
 from app.pipeline.scrapers.http import PoliteClient
@@ -248,9 +252,52 @@ def verify(company: Company, url: str, html: str) -> DomainMatch | None:
     return None
 
 
-async def find_website(client: PoliteClient, company: Company) -> DomainMatch | None:
+class _HostResolver:
+    """Does this hostname exist at all? Memoised, and the answer is definitive.
+
+    Guessed domains mostly do not exist, and finding that out via HTTP is
+    ruinous: the polite client treats a connection failure as possibly
+    transient, so each dead candidate costs three retries with jittered backoff
+    before it gives up. Across a thousand candidates that dominated the entire
+    collection run.
+
+    A DNS lookup answers the same question in milliseconds and correctly treats
+    NXDOMAIN as final — an unregistered domain will not become registered during
+    a backoff. Only names that resolve are worth an HTTP request.
+    """
+
+    def __init__(self, timeout: float = 3.0) -> None:
+        self._resolver = dns.asyncresolver.Resolver()
+        self._resolver.timeout = timeout
+        self._resolver.lifetime = timeout
+        self._memo: dict[str, bool] = {}
+
+    async def exists(self, host: str) -> bool:
+        if host in self._memo:
+            return self._memo[host]
+        try:
+            await self._resolver.resolve(host, "A")
+            found = True
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            found = False
+        except (dns.exception.DNSException, OSError):
+            # A lookup that failed for some other reason is not evidence the
+            # domain is absent, so let HTTP decide rather than skipping a real
+            # site over a flaky resolver.
+            found = True
+        self._memo[host] = found
+        return found
+
+
+async def find_website(
+    client: PoliteClient, company: Company, resolver: _HostResolver | None = None
+) -> DomainMatch | None:
     """Try each candidate in turn, returning the first that proves itself."""
+    dns_check = resolver or _HostResolver()
     for url in candidate_domains(company.name):
+        host = urlparse(url).netloc
+        if not await dns_check.exists(host):
+            continue
         result = await client.get_or_none(url)
         if result is None or not result.ok or not result.text:
             continue
@@ -269,13 +316,16 @@ async def infer_websites(
         return {}
 
     semaphore = asyncio.Semaphore(concurrency)
+    # One resolver for the batch: trade names collide often enough that the
+    # memo earns its keep, and it keeps the DNS fan-out bounded.
+    resolver = _HostResolver()
     tally: dict[str, int] = {"phone": 0, "name": 0, "unproven": 0}
     done = 0
 
     async def one(company: Company) -> None:
         nonlocal done
         async with semaphore:
-            match = await find_website(client, company)
+            match = await find_website(client, company, resolver)
         if match is None:
             tally["unproven"] += 1
         else:
