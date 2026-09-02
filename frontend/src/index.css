@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+/* AcquisitionIQ — design tokens.
+
+   The look is deliberately not a dashboard template. This is a research tool
+   for someone deciding whether to spend seven figures, so it borrows from
+   printed reference material rather than from analytics SaaS: a warm paper
+   ground, dense but generously leaded type, hairline rules instead of cards
+   with shadows, and exactly one accent colour.
+
+   Colour is reserved for meaning. The accent marks a score and nothing else,
+   confidence uses a three-step scale, and everything structural is neutral. If
+   every element is coloured, none of them mean anything. */
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Warm neutrals — paper, not screen grey. */
+  --color-paper: oklch(99% 0.004 85);
+  --color-surface: oklch(97.2% 0.005 85);
+  --color-sunken: oklch(94.8% 0.006 85);
+  --color-rule: oklch(89% 0.008 85);
+  --color-rule-strong: oklch(80% 0.01 85);
+  --color-ink: oklch(24% 0.012 75);
+  --color-ink-soft: oklch(46% 0.011 75);
+  --color-ink-faint: oklch(62% 0.009 75);
+
+  /* The single accent: a deep ochre that reads as considered rather than alarming. */
+  --color-accent: oklch(58% 0.13 62);
+  --color-accent-soft: oklch(88% 0.06 68);
+  --color-accent-ink: oklch(38% 0.11 58);
+
+  /* Confidence, three steps. Not a traffic light — low confidence is not an
+     error, it is a statement about coverage. */
+  --color-high: oklch(52% 0.1 155);
+  --color-medium: oklch(62% 0.1 75);
+  --color-low: oklch(58% 0.03 260);
+}
+
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-paper: oklch(17% 0.008 75);
+    --color-surface: oklch(20.5% 0.009 75);
+    --color-sunken: oklch(24% 0.01 75);
+    --color-rule: oklch(30% 0.012 75);
+    --color-rule-strong: oklch(40% 0.014 75);
+    --color-ink: oklch(93% 0.006 85);
+    --color-ink-soft: oklch(73% 0.008 85);
+    --color-ink-faint: oklch(56% 0.008 85);
+    --color-accent: oklch(72% 0.13 68);
+    --color-accent-soft: oklch(34% 0.07 62);
+    --color-accent-ink: oklch(82% 0.1 70);
+    --color-high: oklch(68% 0.11 155);
+    --color-medium: oklch(76% 0.11 78);
+    --color-low: oklch(70% 0.035 260);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: oklch(17% 0.008 75);
+  --color-surface: oklch(20.5% 0.009 75);
+  --color-sunken: oklch(24% 0.01 75);
+  --color-rule: oklch(30% 0.012 75);
+  --color-rule-strong: oklch(40% 0.014 75);
+  --color-ink: oklch(93% 0.006 85);
+  --color-ink-soft: oklch(73% 0.008 85);
+  --color-ink-faint: oklch(56% 0.008 85);
+  --color-accent: oklch(72% 0.13 68);
+  --color-accent-soft: oklch(34% 0.07 62);
+  --color-accent-ink: oklch(82% 0.1 70);
+  --color-high: oklch(68% 0.11 155);
+  --color-medium: oklch(76% 0.11 78);
+  --color-low: oklch(70% 0.035 260);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv05", "ss01", "tnum" 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures wherever numbers are compared down a column — without them
+   the score column jitters as digits change width and the eye cannot scan it. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus is visible and consistent. The table is keyboard-navigable and a
+   focus ring that only appears on some controls is worse than none. */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-sunken);
+}
+
+.skeleton::after {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--color-rule) 60%, transparent),
+    transparent
+  );
+  animation: shimmer 1.4s infinite;
+  content: "";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

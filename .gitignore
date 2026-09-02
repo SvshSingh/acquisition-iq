@@ -12,3 +12,7 @@ build/
 .mypy_cache/
 coverage/
 .DS_Store
+
+# Frontend build output and deps
+frontend/dist/
+frontend/node_modules/
