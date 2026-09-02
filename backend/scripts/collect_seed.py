@@ -111,20 +111,21 @@ def select_sample(companies: list[Company], limit: int) -> list[Company]:
     a company against its own niche — would be reading a distorted one.
 
     So the sample is stratified by trade in proportion to the real population,
-    and within each trade the most complete records come first: a website beats
-    no website, a contact beats none. That biases towards rows the UI can
-    actually show something about, without letting one trade crowd out the rest.
+    and within each trade it is spread evenly rather than sorted by completeness.
+
+    That second part was a correction. Sorting by completeness seemed obviously
+    right — show the UI the rows it can say most about — and it quietly produced
+    a dataset where 97% of companies had a named owner against 10% of the
+    population it claimed to represent. The demo looked better and meant less:
+    a signal every row shares cannot rank anything, and succession's spread fell
+    by a third. A seed that misreports its own market is the failure this whole
+    product is pitched against, so the only preference kept is for the handful of
+    companies with a website, which are too rare to distort anything and are the
+    only rows that exercise the crawler at all.
     """
     by_trade: dict[str, list[Company]] = {}
     for company in companies:
         by_trade.setdefault(company.industry or "Unknown", []).append(company)
-
-    def richness(c: Company) -> tuple[int, int, int]:
-        contactable = sum(bool(x.phone) + bool(x.email) + bool(x.name) for x in c.contacts)
-        return (1 if c.website else 0, contactable, 1 if c.licence_issued else 0)
-
-    for group in by_trade.values():
-        group.sort(key=richness, reverse=True)
 
     total = len(companies)
     quotas = {
@@ -133,7 +134,20 @@ def select_sample(companies: list[Company], limit: int) -> list[Company]:
 
     selected: list[Company] = []
     for trade, group in sorted(by_trade.items(), key=lambda kv: -len(kv[1])):
-        selected.extend(group[: quotas[trade]])
+        quota = quotas[trade]
+        with_site = [c for c in group if c.website]
+        rest = [c for c in group if not c.website]
+
+        take = with_site[:quota]
+        remaining = quota - len(take)
+        if remaining > 0 and rest:
+            # Evenly spaced rather than the first N: the exports arrive ordered
+            # by licence number, so the head of the list is the oldest licences
+            # and taking it wholesale would skew the age distribution the
+            # succession factor depends on.
+            step = max(1, len(rest) // remaining)
+            take.extend(rest[::step][:remaining])
+        selected.extend(take)
 
     # Rounding can overshoot or undershoot; top up from the largest trade and
     # trim from the end rather than silently returning the wrong count.

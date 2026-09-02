@@ -37,6 +37,7 @@ clean clone despite the WAF.
 
 from __future__ import annotations
 
+import csv
 import logging
 import re
 from datetime import date, datetime
@@ -180,6 +181,49 @@ def row_to_company(row: dict[str, Any], market: Market) -> Company | None:
     )
 
 
+# Personnel titles, most senior first. A licence often lists one person under
+# several titles across time; the strongest is the one worth showing.
+_TITLE_RANK = (
+    "sole owner",
+    "president",
+    "chief executive officer",
+    "owner",
+    "partner",
+    "responsible managing owner",
+    "responsible managing officer",
+    "responsible managing employee",
+    "vice president",
+    "officer",
+    "treasurer",
+    "secretary",
+)
+
+
+def _best_title(raw: str) -> str | None:
+    """Pick the most senior title from a pipe-separated history."""
+    parts = [p.strip() for p in raw.split("|") if p.strip()]
+    if not parts:
+        return None
+    for wanted in _TITLE_RANK:
+        for part in parts:
+            if wanted in part.lower():
+                return part
+    return parts[0]
+
+
+def _person_name(raw: str) -> str | None:
+    """CSLB files names as `LAST FIRST MIDDLE`, space-padded. Render them the way
+    a person would read them, since this goes in front of a user about to make
+    contact."""
+    tokens = raw.split()
+    if not tokens:
+        return None
+    if len(tokens) == 1:
+        return tokens[0].title()
+    last, *rest = tokens
+    return " ".join(t.title() for t in [*rest, last])
+
+
 class CslbSource:
     """Reads committed CSLB exports and yields companies for a market."""
 
@@ -187,6 +231,36 @@ class CslbSource:
 
     def __init__(self, raw_dir: Path | None = None) -> None:
         self._raw_dir = raw_dir or Path(__file__).resolve().parents[3].parent / "data" / "raw"
+
+    def load_principals(self) -> dict[str, tuple[str, str | None]]:
+        """Licence number -> (person, title), from the committed personnel export.
+
+        **Coverage is partial and the gap is an artefact, not a fact.** The
+        statewide personnel file is served through a gateway that closes the
+        connection after thirty seconds, which caps any download at roughly 13MB
+        however it is requested — plain, gzipped, HTTP/1.0, or from a different
+        continent. What arrives is the beginning of a file ordered by licence
+        number, so coverage skews toward older licences and stops around 592,000
+        of about 1.1 million.
+
+        The consequence matters for how the score reads it: a company with no
+        principal here has not been shown to lack one, so contactability reports
+        it as a missing signal rather than a finding. Anything else would let a
+        download limitation masquerade as a fact about the business.
+        """
+        path = self._raw_dir / "cslb_la_personnel.csv"
+        if not path.exists():
+            return {}
+
+        principals: dict[str, tuple[str, str | None]] = {}
+        with path.open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                licence = (row.get("LIC-NO") or "").strip()
+                name = _person_name((row.get("Name") or "").strip())
+                if not licence or not name or licence in principals:
+                    continue
+                principals[licence] = (name, _best_title((row.get("EMP-Titl-CDE") or "").strip()))
+        return principals
 
     def _workbooks(self) -> list[Path]:
         if not self._raw_dir.exists():
@@ -246,8 +320,11 @@ class CslbSource:
             )
             return []
 
+        principals = self.load_principals()
         wanted_counties = {c.upper() for c in market.counties}
         companies: list[Company] = []
+        named = 0
+
         for row in rows:
             county = (_clean(row.get("County")) or "").upper()
             if wanted_counties and county not in wanted_counties:
@@ -257,10 +334,23 @@ class CslbSource:
                 continue
             if not market.is_core(company.city):
                 continue
+
+            principal = principals.get(company.licence_number or "")
+            if principal and company.contacts:
+                name, title = principal
+                company.contacts[0] = company.contacts[0].model_copy(
+                    update={"name": name, "title": title, "is_decision_maker": True}
+                )
+                named += 1
+
             companies.append(company)
 
         logger.info(
-            "CSLB: %d licences -> %d companies in %s", len(rows), len(companies), market.label
+            "CSLB: %d licences -> %d companies in %s (%d with a named principal)",
+            len(rows),
+            len(companies),
+            market.label,
+            named,
         )
         return companies
 
