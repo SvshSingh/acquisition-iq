@@ -1,15 +1,26 @@
-"""Build the committed seed dataset.
+"""Build a committed seed dataset for one market.
 
-Run once, commit the output. The demo then loads instantly and never depends on
-a third-party API being up while someone is watching — but the same code path
-runs live behind "Refresh from source", so nothing here is a mock.
+    python scripts/collect_seed.py --market glendale --limit 250
+    python scripts/collect_seed.py --market columbus --limit 250
 
-    python scripts/collect_seed.py --limit 250 --out ../data/seed_leads.json
+Run once per market, commit the output. The demo then loads instantly and never
+depends on a third-party API being up while someone is watching — but the same
+code path runs live behind "Refresh from source", so nothing here is a mock.
 
-Everything it writes is either observed from OpenStreetMap and the company's own
-website, or computed from those. Nothing is invented: a company whose size we
-cannot observe keeps `employee_count = None` and the buy-box factor reports low
-confidence rather than a fabricated number.
+The market is a parameter, not a constant. That is the point: "does this
+generalise beyond one city?" is the first question anyone asks of a scraper, and
+the honest answer is a second market collected by the same script rather than an
+assurance that it would work.
+
+Two sources feed it, because they are good at opposite things. Licence registers
+publish structure — ownership form, issue date, whether anyone is employed — on
+every row. OpenStreetMap publishes presence, including the website that the
+crawler needs and that no licence register carries. Where both know a business,
+the merged record is far better than either alone.
+
+Nothing here is invented. A company whose size we cannot observe keeps
+`employee_count = None`, and the scoring engine reports the gap rather than
+filling it with a plausible number.
 """
 
 from __future__ import annotations
@@ -19,6 +30,7 @@ import asyncio
 import json
 import logging
 import sys
+import time
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,93 +40,137 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.cache.base import NullCache
 from app.pipeline.dedupe import annotate_chain_locations, deduplicate
-from app.pipeline.geo import haversine_km
+from app.pipeline.markets import DEFAULT_MARKET, MARKETS, Market, get_market
+from app.pipeline.normalize import normalise_name
+from app.pipeline.peers import annotate_peer_density
 from app.pipeline.scrapers.http import PoliteClient
-from app.pipeline.scrapers.overpass import (
-    COLUMBUS_OH_BBOX,
-    BoundingBox,
-    OverpassClient,
-)
 from app.pipeline.scrapers.website import crawl_site
+from app.pipeline.sources.cslb import CslbSource
+from app.pipeline.sources.osm import HOME_SERVICES_TAGS, OverpassSource
 from app.pipeline.validate import MxResolver, validate_contacts
 from app.schemas import Company
 from app.scoring.engine import score_company
 
 logger = logging.getLogger("collect_seed")
 
-# Radius for the "is this niche fragmented here?" question. 15km is about a
-# metro's worth of drive time — the distance over which two operators in the
-# same trade genuinely compete for the same customer, and therefore the distance
-# over which a roll-up thesis makes sense.
-PEER_RADIUS_KM = 15.0
 
+def merge_sources(primary: list[Company], secondary: list[Company]) -> tuple[list[Company], int]:
+    """Fold map records into licence records, keyed on name within a city.
 
-def annotate_peer_density(companies: list[Company], radius_km: float = PEER_RADIUS_KM) -> None:
-    """Count same-industry operators within `radius_km` of each company.
+    The licence register is authoritative for identity and for everything
+    structured; the map contributes the two things it alone has — a website and
+    coordinates. Matching is deliberately conservative: normalised name plus
+    city, no fuzzy threshold. A wrong match here would staple one business's
+    website onto another's licence, and a user clicking through to check the
+    evidence would find a different company. A missed match costs only a blank
+    field, which the scorer already knows how to report.
 
-    This is the one factor input that cannot come from a single record — it is a
-    property of the *neighbourhood*, which is exactly why a lead-gen tool that
-    scrapes companies one at a time cannot produce it. Measuring it per company
-    rather than per vertical matters: an auto shop in a dense corridor and one on
-    the edge of the metro face different consolidation maths, and collapsing them
-    to a single per-vertical number would throw that away.
-
-    O(n²) over the industry buckets, not the whole set. At a few hundred rows per
-    metro that is milliseconds; the blocking key is the industry.
+    Returns the merged list and how many enrichments landed.
     """
-    by_industry: dict[str, list[Company]] = {}
+    index: dict[tuple[str, str], Company] = {}
+    for company in primary:
+        key = (normalise_name(company.name), (company.city or "").strip().upper())
+        index.setdefault(key, company)
+
+    enriched = 0
+    unmatched: list[Company] = []
+
+    for candidate in secondary:
+        key = (normalise_name(candidate.name), (candidate.city or "").strip().upper())
+        match = index.get(key)
+        if match is None:
+            unmatched.append(candidate)
+            continue
+
+        updates: dict[str, object] = {}
+        if not match.website and candidate.website:
+            updates["website"] = candidate.website
+        if match.latitude is None and candidate.latitude is not None:
+            updates["latitude"] = candidate.latitude
+            updates["longitude"] = candidate.longitude
+        if updates:
+            for field, value in updates.items():
+                setattr(match, field, value)
+            enriched += 1
+
+    # Map-only businesses are kept. They are real companies the licence register
+    # did not match — often trading under a name that differs from the licensed
+    # entity — and dropping them would quietly narrow the market.
+    return primary + unmatched, enriched
+
+
+def select_sample(companies: list[Company], limit: int) -> list[Company]:
+    """Choose the seed slice: proportional across trades, richest records first.
+
+    Taking the first N in source order produced a dataset that was 97%
+    electricians, purely because the electrical export happened to be read first.
+    A demo whose trade mix is an artefact of file ordering misrepresents the
+    market it claims to describe, and the fragmentation factor — which compares
+    a company against its own niche — would be reading a distorted one.
+
+    So the sample is stratified by trade in proportion to the real population,
+    and within each trade the most complete records come first: a website beats
+    no website, a contact beats none. That biases towards rows the UI can
+    actually show something about, without letting one trade crowd out the rest.
+    """
+    by_trade: dict[str, list[Company]] = {}
     for company in companies:
-        if company.industry and company.latitude is not None and company.longitude is not None:
-            by_industry.setdefault(company.industry, []).append(company)
+        by_trade.setdefault(company.industry or "Unknown", []).append(company)
 
-    for peers in by_industry.values():
-        for company in peers:
-            assert company.latitude is not None and company.longitude is not None
-            count = 0
-            for other in peers:
-                if other is company:
-                    continue
-                assert other.latitude is not None and other.longitude is not None
-                if (
-                    haversine_km(
-                        company.latitude, company.longitude, other.latitude, other.longitude
-                    )
-                    <= radius_km
-                ):
-                    count += 1
-            company.peer_count_in_niche = count
+    def richness(c: Company) -> tuple[int, int, int]:
+        contactable = sum(bool(x.phone) + bool(x.email) + bool(x.name) for x in c.contacts)
+        return (1 if c.website else 0, contactable, 1 if c.licence_issued else 0)
 
-    # A company with no coordinates gets nothing rather than a guess — the
-    # factor then reports the signal as missing, which is the truth.
-    for company in companies:
-        if company.peer_count_in_niche is None:
-            logger.debug("no peer count for %s (missing coordinates or industry)", company.name)
+    for group in by_trade.values():
+        group.sort(key=richness, reverse=True)
+
+    total = len(companies)
+    quotas = {
+        trade: max(1, round(limit * len(group) / total)) for trade, group in by_trade.items()
+    }
+
+    selected: list[Company] = []
+    for trade, group in sorted(by_trade.items(), key=lambda kv: -len(kv[1])):
+        selected.extend(group[: quotas[trade]])
+
+    # Rounding can overshoot or undershoot; top up from the largest trade and
+    # trim from the end rather than silently returning the wrong count.
+    if len(selected) < limit:
+        chosen = {c.id for c in selected}
+        for company in companies:
+            if len(selected) >= limit:
+                break
+            if company.id not in chosen:
+                selected.append(company)
+    return selected[:limit]
 
 
-async def enrich(
+async def enrich_websites(
     client: PoliteClient, companies: list[Company], concurrency: int = 8
-) -> None:
+) -> int:
     """Crawl each company's own site and fold the signals in.
 
-    Bounded separately from the HTTP client's own per-host limit: that one stops
-    us hammering a single host, this one stops us opening 500 sites at once.
+    Bounded separately from the HTTP client's per-host limit: that one stops us
+    hammering a single host, this one stops us opening hundreds at once.
     """
+    targets = [c for c in companies if c.website]
+    if not targets:
+        return 0
+
     semaphore = asyncio.Semaphore(concurrency)
     done = 0
 
     async def one(company: Company) -> None:
         nonlocal done
-        if not company.website:
-            return
         async with semaphore:
-            signals, contacts = await crawl_site(client, company.website)
+            signals, contacts = await crawl_site(client, company.website or "")
         company.web = signals
         if contacts and not company.contacts:
             company.contacts = contacts
         elif contacts and company.contacts:
-            # Merge rather than replace: the two sources are complementary. OSM
-            # usually carries the phone number, the website usually carries the
-            # mailbox, and only the website ever names the owner.
+            # The sources are complementary: the licence register carries the
+            # phone, the website carries the mailbox, and only the website ever
+            # names the owner.
             existing, found = company.contacts[0], contacts[0]
             merged = {
                 field: getattr(found, field)
@@ -128,108 +184,131 @@ async def enrich(
         company.last_refreshed = datetime.now(UTC)
         done += 1
         if done % 25 == 0:
-            logger.info("crawled %d sites", done)
+            logger.info("crawled %d/%d sites", done, len(targets))
 
-    await asyncio.gather(*(one(c) for c in companies))
+    await asyncio.gather(*(one(c) for c in targets))
+    return done
 
 
-async def collect(limit: int, *, use_cache: bool) -> dict[str, object] | None:
-    """Discover, enrich and score. Returns the payload; the caller writes it.
+async def validate_all(companies: list[Company], concurrency: int = 24) -> int:
+    """Validate every contact, concurrently across companies.
 
-    Writing is left to the synchronous caller on purpose — blocking file I/O
-    inside the event loop stalls every in-flight request, and this function is
-    holding a few hundred of them.
+    Most companies hold a single contact, so validating per company would
+    serialise the stage into one DNS round trip after another. The per-domain
+    memo inside MxResolver means the fan-out costs the resolvers almost nothing:
+    the queries collapse onto the handful of distinct mail domains in play.
     """
-    # NullCache unless explicitly asked otherwise: the shared cache is backed by
-    # Postgres, and this script has to run from a clean clone with no database
-    # up. The live "refresh from source" path in the API is where the cache
-    # earns its keep.
+    resolver = MxResolver()
+    with_contacts = [c for c in companies if c.contacts]
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def one(company: Company) -> None:
+        async with semaphore:
+            company.contacts = await validate_contacts(company.contacts, resolver)
+
+    await asyncio.gather(*(one(c) for c in with_contacts))
+    return len(with_contacts)
+
+
+async def collect(market: Market, limit: int, *, use_cache: bool) -> dict[str, object] | None:
+    """Discover, merge, enrich and score. Returns the payload; caller writes it.
+
+    Writing is left to the synchronous caller: blocking file I/O inside the
+    event loop stalls every in-flight request, and this holds hundreds.
+    """
+    # NullCache unless asked otherwise — the shared cache is Postgres-backed and
+    # this has to run from a clean clone with no database up.
     async with PoliteClient(cache=None if use_cache else NullCache()) as client:
-        logger.info("discovering companies from OpenStreetMap...")
-        companies = await OverpassClient(client).discover(
-            BoundingBox(*COLUMBUS_OH_BBOX), use_cache=use_cache
-        )
-        logger.info("discovered %d named businesses", len(companies))
+        licensed = await CslbSource().discover(market)
+        mapped = await OverpassSource(
+            client, HOME_SERVICES_TAGS, use_cache=use_cache
+        ).discover(market)
+
+        if licensed:
+            companies, enriched = merge_sources(licensed, mapped)
+            logger.info(
+                "merged: %d licence records + %d map records -> %d companies "
+                "(%d enriched with a website or coordinates)",
+                len(licensed),
+                len(mapped),
+                len(companies),
+                enriched,
+            )
+        else:
+            # No licence coverage for this market (anything outside California).
+            companies = mapped
+            logger.info("no licence data for %s; using map data alone", market.label)
+
         if not companies:
             logger.error("no companies discovered; aborting without writing")
             return None
 
-        # Dedupe before anything expensive: crawling the same site twice is
-        # wasted politeness budget as well as wasted time.
         result = deduplicate(companies)
         if result.removed:
             logger.info("merged %d duplicate records", result.removed)
-            for match in result.matches[:10]:
-                logger.info("  %s <- %s (%s)", match.kept_id, match.dropped_id, match.reason)
         companies = result.companies
 
-        # Both of these read the *whole* discovered set, not the slice we keep.
-        # Peer density and chain size are properties of the neighbourhood, and
+        # Both read the whole discovered set, not the slice we keep — peer
+        # density and chain size are properties of the neighbourhood, and
         # measuring them over a truncated sample would understate both.
-        annotate_peer_density(companies)
+        measured = annotate_peer_density(companies)
         chains = annotate_chain_locations(companies)
-        logger.info("flagged %d companies as multi-location chains", chains)
+        logger.info("peer density on %d companies; %d flagged as chains", measured, chains)
 
-        # Prefer companies with a website: they are the ones the crawler can say
-        # anything about, and a seed set of blank records demos nothing. Some
-        # site-less companies are kept deliberately so the UI has to handle the
-        # low-confidence case on real data rather than only in tests.
-        with_site = [c for c in companies if c.website]
-        without_site = [c for c in companies if not c.website]
-        keep_without = min(len(without_site), max(0, limit - len(with_site)) or limit // 10)
-        selected = (with_site + without_site[:keep_without])[:limit]
+        selected = select_sample(companies, limit)
         logger.info(
-            "selected %d companies (%d with a website, %d without)",
+            "selected %d of %d (%d with a website) — %s",
             len(selected),
+            len(companies),
             sum(1 for c in selected if c.website),
-            sum(1 for c in selected if not c.website),
+            dict(Counter(c.industry for c in selected).most_common()),
         )
 
-        await enrich(client, selected)
+        crawled = await enrich_websites(client, selected)
+        logger.info("crawled %d sites", crawled)
 
-    # Validation last, once every source has contributed what it has. Running it
-    # earlier would mean validating an OSM phone number and then discarding the
-    # verdict when the website turns up a better contact.
-    resolver = MxResolver()
-    validated = 0
-    for company in selected:
-        if company.contacts:
-            company.contacts = await validate_contacts(company.contacts, resolver)
-            validated += 1
-    logger.info("validated contacts for %d companies", validated)
+    started = time.monotonic()
+    validated = await validate_all(selected)
+    logger.info("validated %d companies in %.1fs", validated, time.monotonic() - started)
 
-    scored = [(c, score_company(c)) for c in selected]
-    scored.sort(key=lambda pair: pair[1].score, reverse=True)
+    scored = sorted(
+        ((c, score_company(c)) for c in selected), key=lambda pair: pair[1].score, reverse=True
+    )
 
-    payload = {
+    scores = sorted(s.score for _, s in scored)
+    n = len(scores)
+    logger.info(
+        "score range %.1f-%.1f | median %.1f | IQR %.1f-%.1f",
+        scores[0],
+        scores[-1],
+        scores[n // 2],
+        scores[n // 4],
+        scores[3 * n // 4],
+    )
+    logger.info("verticals: %s", dict(Counter(c.industry for c, _ in scored).most_common()))
+
+    return {
         "generated_at": datetime.now(UTC).isoformat(),
-        "source": "OpenStreetMap via Overpass API (ODbL), plus each company's own website",
-        "licence": "ODbL 1.0 — https://www.openstreetmap.org/copyright",
-        "bbox": list(COLUMBUS_OH_BBOX),
-        "peer_radius_km": PEER_RADIUS_KM,
+        "market": {"key": market.key, "label": market.label, "state": market.state},
+        "sources": [
+            "California Contractors State License Board public data portal "
+            "(public domain, California Conditions of Use)",
+            "OpenStreetMap via the Overpass API (ODbL 1.0 — "
+            "https://www.openstreetmap.org/copyright)",
+            "Each company's own website",
+        ],
         "count": len(scored),
         "companies": [c.model_dump(mode="json") for c, _ in scored],
     }
-    scores = sorted(s.score for _, s in scored)
-    industries = Counter(c.industry for c, _ in scored)
-    logger.info(
-        "score range %.1f-%.1f, median %.1f, IQR %.1f-%.1f",
-        scores[0],
-        scores[-1],
-        scores[len(scores) // 2],
-        scores[len(scores) // 4],
-        scores[3 * len(scores) // 4],
-    )
-    logger.info("verticals: %s", dict(industries.most_common()))
-    return payload
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--limit", type=int, default=250, help="max companies to keep")
     parser.add_argument(
-        "--out", type=Path, default=Path(__file__).resolve().parents[2] / "data" / "seed_leads.json"
+        "--market", default=DEFAULT_MARKET, choices=sorted(MARKETS), help="which market to collect"
     )
+    parser.add_argument("--limit", type=int, default=250, help="max companies to keep")
+    parser.add_argument("--out", type=Path, default=None, help="output path")
     parser.add_argument(
         "--use-cache",
         action="store_true",
@@ -245,11 +324,15 @@ def main() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    payload = asyncio.run(collect(args.limit, use_cache=args.use_cache))
+    market = get_market(args.market)
+    out_path: Path = args.out or (
+        Path(__file__).resolve().parents[2] / "data" / f"seed_{market.key}.json"
+    )
+
+    payload = asyncio.run(collect(market, args.limit, use_cache=args.use_cache))
     if payload is None:
         raise SystemExit(1)
 
-    out_path: Path = args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     logger.info("wrote %s (%s companies)", out_path, payload["count"])

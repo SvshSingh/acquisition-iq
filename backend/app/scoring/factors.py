@@ -42,6 +42,43 @@ _OWNERSHIP_PATTERNS = [
     (re.compile(r"\bour founder\b", re.I), "Founder still referenced on site", 10.0),
 ]
 
+# Ownership as *filed with a licensing board*, which outranks anything a
+# homepage claims. "Family owned since 1985" is marketing; "Sole Owner" is a
+# legal filing, present on every row rather than 12% of them.
+#
+# The impacts are deliberately not a simple ranking of formality. A California
+# corporation is the default wrapper for a two-person plumbing firm as readily
+# as for a regional group, so it earns almost nothing either way — the signal is
+# genuinely weak, and pretending otherwise would put confident-looking numbers
+# on a coin flip.
+_FILED_OWNERSHIP: dict[str, tuple[float, str]] = {
+    "sole owner": (
+        28.0,
+        "Filed with the licensing board as a sole proprietorship. One "
+        "identifiable owner, so a sale is a personal decision rather than a "
+        "board's — the cleanest succession signal available.",
+    ),
+    "partnership": (
+        22.0,
+        "Filed as a partnership — a small, identifiable ownership group.",
+    ),
+    "limited liability": (
+        8.0,
+        "Filed as an LLC. Common for owner-held businesses, but the form alone "
+        "does not reveal who holds it.",
+    ),
+    "corporation": (
+        2.0,
+        "Filed as a corporation. Close to neutral: in California this is the "
+        "default wrapper for small owner-run firms as much as for large ones.",
+    ),
+    "jointventure": (
+        -12.0,
+        "Filed as a joint venture — a project vehicle rather than a going "
+        "concern with an owner who could sell it.",
+    ),
+}
+
 # Tenure claims made in prose. Competes with the age computed from a known
 # founding year — we take whichever is stronger, never both.
 _TENURE_PATTERNS = [
@@ -155,9 +192,24 @@ def score_succession(company: Company, *, today: datetime | None = None) -> Fact
     missing: list[str] = []
     score = 35.0  # neutral prior — absence of evidence is not evidence of absence
 
-    owner_claim = _best_match(text, _OWNERSHIP_PATTERNS)
-    if owner_claim is not None:
-        hit, label, impact = owner_claim
+    # Filed ownership beats claimed ownership. Where both exist, the stronger
+    # signal wins rather than the two stacking — they describe one fact.
+    filed = _FILED_OWNERSHIP.get((company.business_type or "").strip().lower())
+    claim = _best_match(text, _OWNERSHIP_PATTERNS)
+
+    if filed is not None and (claim is None or filed[0] >= claim[2]):
+        impact, detail = filed
+        score += impact
+        evidence.append(
+            Evidence(
+                label=f"Ownership form: {company.business_type}",
+                detail=detail,
+                source_url=company.source_url,
+                impact=impact,
+            )
+        )
+    elif claim is not None:
+        hit, label, impact = claim
         score += impact
         evidence.append(
             Evidence(
@@ -168,19 +220,32 @@ def score_succession(company: Company, *, today: datetime | None = None) -> Fact
             )
         )
     else:
-        missing.append("ownership language")
+        missing.append("ownership evidence")
 
     founded = company.founded_year or company.web.founded_year
     age = now.year - founded if founded else None
+
+    # A licence issue date is a *lower bound* on age, not a founding date — an
+    # established firm can hold a newer licence after re-registering. The
+    # evidence string says which one it is, because the two support different
+    # conclusions and a user checking our work would notice.
+    licensed = company.licence_issued is not None
+    origin = "Licensed since" if licensed else "Founded"
+    caveat = (
+        " Licence issue date, so this is a floor on the age of the business, not "
+        "its founding year."
+        if licensed
+        else ""
+    )
 
     if age is not None and age < 8:
         score -= 18.0
         evidence.append(
             Evidence(
                 label="Young business",
-                detail=f"Founded {founded} — only {age} years old; owner is "
-                "unlikely to be seeking an exit.",
-                source_url=company.website,
+                detail=f"{origin} {founded} — only {age} years old; an owner is "
+                f"unlikely to be seeking an exit this early.{caveat}",
+                source_url=company.source_url or company.website,
                 impact=-18.0,
             )
         )
@@ -192,8 +257,8 @@ def score_succession(company: Company, *, today: datetime | None = None) -> Fact
             tenure.append(
                 (
                     "Long-established business",
-                    f"Founded {founded} — {age} years of trading, "
-                    "consistent with an owner near retirement.",
+                    f"{origin} {founded} — {age} years of trading, consistent "
+                    f"with an owner approaching retirement.{caveat}",
                     min(24.0, 8.0 + (age - 25) * 0.6),
                 )
             )
@@ -312,8 +377,63 @@ def score_buy_box(company: Company, buy_box: BuyBox | None = None) -> FactorResu
     else:
         missing.append("revenue estimate")
 
-    score = sum(parts) / len(parts) if parts else 30.0
-    return _result(FactorKey.BUY_BOX, score, evidence, missing)
+    if parts:
+        return _result(FactorKey.BUY_BOX, sum(parts) / len(parts), evidence, missing)
+
+    # No headcount and no revenue — the case that covered 100% of the previous
+    # dataset and left this factor with a standard deviation of 0.00 across 250
+    # companies. A licence record cannot supply a number, but it can supply a
+    # *band*: California requires workers' compensation cover of any licensee
+    # with employees and exempts those without, so the field separates
+    # owner-only operations from staffed ones.
+    #
+    # That is genuinely less than a headcount and the evidence says so. What it
+    # can do is rule out the zero-employee case, which sits definitively below a
+    # ten-person floor — and that is a real measurement, not a prior.
+    if company.has_employees is False:
+        return _result(
+            FactorKey.BUY_BOX,
+            12.0,
+            [
+                Evidence(
+                    label="No employees",
+                    detail=(
+                        "Licence carries a workers' compensation exemption, which "
+                        "California grants only to licensees with no employees. An "
+                        f"owner-only operation sits below the {box.min_employees}-"
+                        "person floor of this buy box."
+                    ),
+                    source_url=company.source_url,
+                    impact=-38.0,
+                )
+            ],
+            ["exact headcount", "revenue estimate"],
+            measured=True,
+        )
+
+    if company.has_employees is True:
+        return _result(
+            FactorKey.BUY_BOX,
+            55.0,
+            [
+                Evidence(
+                    label="Employs staff",
+                    detail=(
+                        "Licence carries active workers' compensation cover, which "
+                        "California requires of any licensee with employees. Confirms "
+                        "at least one member of staff, but the filing does not say how "
+                        "many — so this places the business in the band, not at a point "
+                        "in it."
+                    ),
+                    source_url=company.source_url,
+                    impact=5.0,
+                )
+            ],
+            ["exact headcount", "revenue estimate"],
+            measured=True,
+        )
+
+    return _result(FactorKey.BUY_BOX, 30.0, evidence, missing)
 
 
 def _band_score(value: float, lo: float, hi: float, tolerance: float) -> float:
@@ -351,18 +471,20 @@ def score_digital_gap(company: Company, *, today: datetime | None = None) -> Fac
     score = 28.0
 
     if not company.website:
+        # Not a finding. A licence register simply has no website column, so an
+        # absent URL here means "this source does not carry one", not "this
+        # business has no web presence" — and the first version of this branch
+        # asserted the second, awarding every one of 3,846 CSLB companies the
+        # same "large modernisation upside" on evidence that did not exist.
+        #
+        # Unmeasured, so the engine redistributes this weight to factors that
+        # actually observed something rather than letting a fiction vote.
         return _result(
             FactorKey.DIGITAL_GAP,
             50.0,
-            [
-                Evidence(
-                    label="No website found",
-                    detail="No web presence located. Large modernisation upside, "
-                    "but also a signal the business may be very small or inactive.",
-                    impact=10.0,
-                )
-            ],
+            [],
             ["website", "site technology", "content freshness"],
+            measured=False,
         )
 
     checks: list[tuple[bool | None, str, str, float]] = [

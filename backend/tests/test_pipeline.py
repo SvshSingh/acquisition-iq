@@ -8,15 +8,15 @@ exactly when you cannot afford them to be untested.
 
 from __future__ import annotations
 
-import sys
 from datetime import UTC, datetime
-from pathlib import Path
 
 import httpx
 import pytest
 import respx
 
 from app.cache.base import NullCache, http_cache_key
+from app.pipeline.geo import haversine_km
+from app.pipeline.peers import annotate_peer_density
 from app.pipeline.scrapers import website
 from app.pipeline.scrapers.http import (
     CircuitOpenError,
@@ -34,9 +34,6 @@ from app.pipeline.scrapers.overpass import (
 )
 from app.pipeline.validate import normalise_phone, validate_contact, verify_email
 from app.schemas import Company, Contact, VerificationStatus
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from collect_seed import annotate_peer_density, haversine_km
 
 NOW = datetime(2026, 9, 2, tzinfo=UTC)
 

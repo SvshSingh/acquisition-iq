@@ -237,6 +237,44 @@ class Company(BaseModel):
     revenue_is_estimate: bool = True
     founded_year: int | None = None
 
+    # --- structured licence data (contractor licensing boards) ----------------
+    # These are the fields that let the scorer stop inferring from marketing
+    # copy. On a website, "family owned since 1985" is a claim; on a licence
+    # record, the ownership form and the issue date are filed facts.
+
+    business_type: str | None = Field(
+        default=None,
+        description=(
+            "Legal ownership form as filed with the licensing board — 'Sole "
+            "Owner', 'Partnership', 'Corporation', 'Limited Liability'. A direct "
+            "ownership signal, where the website version is guesswork."
+        ),
+    )
+    has_employees: bool | None = Field(
+        default=None,
+        description=(
+            "Whether the business employs anyone, derived from workers' "
+            "compensation coverage. California requires a policy of any licensee "
+            "with employees and grants an exemption to those without, so the "
+            "field separates owner-only operations from staffed ones. It is a "
+            "band, not a headcount: True means at least one employee, never how "
+            "many."
+        ),
+    )
+    licence_number: str | None = None
+    licence_issued: date | None = Field(
+        default=None,
+        description=(
+            "Date the licence was issued. A lower bound on the age of the "
+            "business, not its founding date — an established firm can hold a "
+            "newer licence after a re-registration. Treated as such."
+        ),
+    )
+    licence_classifications: list[str] = Field(
+        default_factory=list,
+        description="Trade classification codes, e.g. C-10 electrical, C-20 HVAC.",
+    )
+
     contacts: list[Contact] = Field(default_factory=list)
     web: WebSignals = Field(default_factory=WebSignals)
 

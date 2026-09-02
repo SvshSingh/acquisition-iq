@@ -17,7 +17,7 @@ from app.schemas import (
 )
 from app.scoring import factors
 
-ENGINE_VERSION = "1.2.0"
+ENGINE_VERSION = "1.3.0"
 
 # Confidence is derived from the weighted share of factors that had good
 # coverage, not from an average of enum values.
