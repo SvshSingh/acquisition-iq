@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.cache.base import NullCache
 from app.pipeline.dedupe import annotate_chain_locations, deduplicate
+from app.pipeline.domains import infer_websites
 from app.pipeline.markets import DEFAULT_MARKET, MARKETS, Market, get_market
 from app.pipeline.normalize import normalise_name
 from app.pipeline.peers import annotate_peer_density
@@ -280,6 +281,20 @@ async def collect(market: Market, limit: int, *, use_cache: bool) -> dict[str, o
             sum(1 for c in selected if c.website),
             dict(Counter(c.industry for c in selected).most_common()),
         )
+
+        # Before crawling, try to find the sites no source published. Licence
+        # registers have no URL column and the map knew one business in 3,846,
+        # which left the two web-based factors dark on almost every row.
+        # Candidates are derived from the name and then proved against the page
+        # or discarded — see app/pipeline/domains.py.
+        found = await infer_websites(client, selected)
+        if found:
+            logger.info(
+                "domain inference: %d proved by phone, %d by name, %d unproven",
+                found.get("phone", 0),
+                found.get("name", 0),
+                found.get("unproven", 0),
+            )
 
         crawled = await enrich_websites(client, selected)
         logger.info("crawled %d sites", crawled)

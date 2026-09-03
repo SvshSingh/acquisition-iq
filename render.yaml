@@ -1,0 +1,24 @@
+# Backend as a long-running container, deliberately not serverless. Scrape jobs
+# behind "refresh from source" outlast a serverless timeout, and the connection
+# pool and parsed dataset are only worth having if the process survives between
+# requests. See ARCHITECTURE.md.
+
+services:
+  - type: web
+    name: acquisition-iq-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: CORS_ORIGINS
+        value: https://acquisition-iq.vercel.app
+      # Unset on the free tier: the cache falls back to Postgres, which is the
+      # path this deployment runs on by design.
+      - key: REDIS_URL
+        value: ""

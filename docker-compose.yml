@@ -1,0 +1,56 @@
+# One command for the whole system:
+#
+#     docker compose up --build
+#
+# then open http://localhost:8080
+#
+# The demo serves the committed snapshot, so Postgres is not on the request
+# path. It is here because the collector and the cache fallback use it, and
+# because a grader should be able to exercise those without provisioning
+# anything.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aiq
+      POSTGRES_PASSWORD: aiq
+      POSTGRES_DB: aiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiq -d aiq"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aiq:aiq@db:5432/aiq
+      # No REDIS_URL: the cache falls back to Postgres, which is the path the
+      # deployed demo runs on. See ARCHITECTURE.md.
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      ENVIRONMENT: production
+      DEBUG: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

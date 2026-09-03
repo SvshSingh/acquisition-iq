@@ -15,7 +15,6 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@rolldown/binding-win32-x64-msvc": "^1.2.7",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
@@ -25,5 +24,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.7"
   }
 }
