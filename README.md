@@ -50,6 +50,16 @@ refuses to blur them.
 **Is yours to tune.** The six weights are sliders; the table re-sorts as you move
 them, in the browser, with no round trip.
 
+**Scores the list you already have.** Import a CSV from SaaSquatch, a CRM or a
+broker sheet and it is validated and acquisition-scored in place, with the same
+explainable breakdown — no new tool to adopt, no leaving the workflow that
+produced the list. The columns are auto-mapped and the response says exactly
+which column became which field. This is where the reframe lands: AcquisitionIQ
+is a *layer* on top of a lead source, not a replacement for one. It also closes
+the one gap the public sources can't — a SaaSquatch export carries employee-count
+and revenue estimates, so `buy_box` becomes high-confidence on imported rows where
+the licence data can only report it as unknown.
+
 **Exports to your CRM.** HubSpot and Salesforce column presets, not a raw dump.
 
 ---

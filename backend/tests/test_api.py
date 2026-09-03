@@ -185,3 +185,48 @@ def test_refresh_of_unknown_company_is_404(client: TestClient):
 
 def _first_id(client: TestClient) -> str:
     return client.get("/api/companies", params={"limit": 1}).json()["results"][0]["company"]["id"]
+
+
+# --------------------------------------------------------------------------- #
+# bring-your-own-list upload
+# --------------------------------------------------------------------------- #
+
+def test_upload_scores_a_lead_list(client: TestClient):
+    csv_text = (
+        "Company Name,Website,Employees,Estimated Revenue,City,Ownership\n"
+        "Whitaker HVAC,whitakerhvac.com,42,$5.2M,Glendale,Sole Owner\n"
+        "National Mechanical Group,nmg.com,4200,$680M,Los Angeles,Corporation\n"
+    )
+    resp = client.post(
+        "/api/score-upload",
+        files={"file": ("leads.csv", csv_text, "text/csv")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    # The right-sized owner-operated firm must outrank the 4,200-person group.
+    top = body["results"][0]["company"]["name"]
+    assert top == "Whitaker HVAC"
+    # buy_box is measurable here because the upload carried size data.
+    buy_box = next(
+        f for f in body["results"][0]["score"]["factors"] if f["key"] == "buy_box"
+    )
+    assert buy_box["measured"] is True
+
+
+def test_upload_reports_its_column_mapping(client: TestClient):
+    resp = client.post(
+        "/api/score-upload",
+        files={"file": ("leads.csv", "Company,Mystery Column\nAcme,x\n", "text/csv")},
+    )
+    body = resp.json()
+    assert "Mystery Column" in body["unmapped_columns"]
+    assert body["column_mapping"]["Company"] == "name"
+
+
+def test_upload_with_no_scorable_rows_is_422(client: TestClient):
+    resp = client.post(
+        "/api/score-upload",
+        files={"file": ("bad.csv", "Colour,Shape\nred,square\n", "text/csv")},
+    )
+    assert resp.status_code == 422

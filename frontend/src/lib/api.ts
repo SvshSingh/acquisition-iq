@@ -1,5 +1,15 @@
 import type { Meta, ScoredCompany, SearchResponse, Weights } from "./types";
 
+export interface UploadResult {
+  results: ScoredCompany[];
+  total: number;
+  column_mapping: Record<string, string>;
+  unmapped_columns: string[];
+  fields_present: string[];
+  skipped_rows: number;
+  source: string;
+}
+
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 async function get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
@@ -66,6 +76,28 @@ export const api = {
    *  serverless function. */
   refresh: (id: string) =>
     post<ScoredCompany>(`/companies/${encodeURIComponent(id)}/refresh`),
+
+  /** Score a lead list the user brings in — a CSV from SaaSquatch, a CRM, or a
+   *  broker sheet. The layer that makes any lead source acquisition-aware. */
+  async scoreUpload(file: File): Promise<UploadResult> {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(new URL(`${BASE}/score-upload`, window.location.origin), {
+      method: "POST",
+      body: form,
+    });
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const body = (await response.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(detail);
+    }
+    return (await response.json()) as UploadResult;
+  },
 
   /** Build the export URL rather than fetching it: the browser's own download
    *  handling gives a real filename and a progress indicator, which a blob

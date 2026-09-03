@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { api, type SearchParams } from "./lib/api";
+import { api, type SearchParams, type UploadResult } from "./lib/api";
 import { rescore } from "./lib/scoring";
 import type { FactorKey, ScoredCompany, Weights } from "./lib/types";
 import { FACTOR_ORDER } from "./lib/types";
@@ -32,6 +32,10 @@ export default function App() {
   // refresh answers "what does this look like right now"; the shipped dataset
   // stays exactly as collected so two people see the same baseline.
   const [refreshed, setRefreshed] = useState<Record<string, ScoredCompany>>({});
+  // An imported list, when present, takes over the table — the same scoring,
+  // table and drawer, just fed from the user's own leads instead of the seed.
+  const [imported, setImported] = useState<UploadResult | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   const search = useQuery({
@@ -46,18 +50,33 @@ export default function App() {
       setRefreshed((prev) => ({ ...prev, [updated.company.id]: updated })),
   });
 
+  const upload = useMutation({
+    mutationFn: api.scoreUpload,
+    onSuccess: (result) => {
+      setImported(result);
+      setOpenId(null);
+      setChecked(new Set());
+    },
+  });
+
   /* Re-weighting happens here rather than on the server, so moving a slider
      re-sorts in a frame instead of a round trip. The subscores and the decision
      about what was measured are the server's; this is only the arithmetic. */
   const rows: Row[] = useMemo(() => {
-    const items = search.data?.results ?? [];
+    const items = imported ? imported.results : (search.data?.results ?? []);
     return items
       .map((item) => {
         const current = refreshed[item.company.id] ?? item;
         return { item: current, rescored: rescore(current, weights) };
       })
       .sort((a, b) => b.rescored.score - a.rescored.score);
-  }, [search.data, weights, refreshed]);
+  }, [imported, search.data, weights, refreshed]);
+
+  function onPickFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) upload.mutate(file);
+    event.target.value = ""; // let the same file be re-picked after a clear
+  }
 
   const open = rows.find((r) => r.item.company.id === openId) ?? null;
 
@@ -108,11 +127,27 @@ export default function App() {
           </p>
         </div>
         <div className="flex items-center gap-4 text-[12px] text-[var(--color-ink-faint)]">
-          {meta.data ? (
-            <span>
+          {meta.data && !imported ? (
+            <span className="hidden md:inline">
               {meta.data.market.label} · {meta.data.count} companies
             </span>
           ) : null}
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={onPickFile}
+          />
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={upload.isPending}
+            className="rounded border border-[var(--color-rule-strong)] px-2 py-1 font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface)] disabled:cursor-wait disabled:opacity-60"
+            title="Score your own lead list — a CSV from SaaSquatch, a CRM, or a broker sheet"
+          >
+            {upload.isPending ? "Scoring…" : "Import CSV"}
+          </button>
           <a
             className="underline decoration-dotted underline-offset-2 hover:text-[var(--color-ink)]"
             href={exportHref}
@@ -215,11 +250,44 @@ export default function App() {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {search.isError ? (
+          {imported ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-rule)] bg-[var(--color-accent-soft)] px-4 py-2 text-[12px]">
+              <span className="font-medium text-[var(--color-ink)]">
+                Scoring {imported.total} companies from {imported.source}
+              </span>
+              <span className="text-[var(--color-ink-soft)]">
+                mapped {imported.fields_present.length} field
+                {imported.fields_present.length === 1 ? "" : "s"}
+                {imported.unmapped_columns.length
+                  ? ` · ignored ${imported.unmapped_columns.length} unrecognised column${imported.unmapped_columns.length === 1 ? "" : "s"}`
+                  : ""}
+                {imported.skipped_rows ? ` · skipped ${imported.skipped_rows} empty rows` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setImported(null);
+                  setOpenId(null);
+                  setChecked(new Set());
+                }}
+                className="ml-auto underline decoration-dotted underline-offset-2 hover:text-[var(--color-ink)]"
+              >
+                Back to {meta.data?.market.label ?? "the seed market"}
+              </button>
+            </div>
+          ) : null}
+
+          {upload.isError ? (
+            <div className="border-b border-[var(--color-rule)] px-4 py-2 text-[12px] text-[var(--color-ink-soft)]">
+              Import failed: {(upload.error as Error).message}
+            </div>
+          ) : null}
+
+          {!imported && search.isError ? (
             <EmptyState title="Could not load companies">
               {(search.error as Error).message}
             </EmptyState>
-          ) : !search.isLoading && rows.length === 0 ? (
+          ) : !imported && !search.isLoading && rows.length === 0 ? (
             <EmptyState title="No companies match these filters">
               Widen the trade or ownership filter, or lower the minimum trading
               years.
@@ -227,7 +295,7 @@ export default function App() {
           ) : (
             <ResultsTable
               rows={rows}
-              loading={search.isLoading}
+              loading={search.isLoading && !imported}
               selectedId={openId}
               checked={checked}
               onOpen={setOpenId}

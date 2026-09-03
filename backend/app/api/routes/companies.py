@@ -24,10 +24,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 
 from app.config import settings
 from app.pipeline.domains import find_website
+from app.pipeline.ingest import ingest_csv
 from app.pipeline.quality import assess
 from app.pipeline.scrapers.http import PoliteClient
 from app.pipeline.scrapers.website import crawl_site
@@ -279,6 +280,66 @@ async def refresh_company(company_id: str) -> ScoredCompany:
     working.data_quality, working.quality_issues = assess(working)
 
     return score_many([working])[0]
+
+
+@router.post("/score-upload")
+async def score_upload(file: UploadFile = File(...)) -> dict[str, Any]:  # noqa: B008
+    """Score a lead list the user brings in — the layer on top of any lead source.
+
+    A searcher exports from SaaSquatch, a CRM or a broker sheet, drops the CSV
+    here, and gets it validated and acquisition-scored with the same explainable
+    breakdown as the seed data. The point is workflow fit: they do not leave
+    whatever produced the list, and they do not adopt a new tool to enrich it.
+
+    Only the columns present are used, and the response says exactly which column
+    became which field. Contacts are validated (phone to E.164, email domain
+    against DNS) because that is fast and is the named enrichment bonus; websites
+    are deliberately not crawled synchronously here — that is per-row network work
+    with an abuse surface, and the per-company refresh endpoint covers it.
+
+    Nothing web-dependent is invented for rows without a site: the coverage meter
+    already reports how much of the thesis the supplied columns could support,
+    which is exactly the honest behaviour a bring-your-own-list flow needs.
+    """
+    raw = await file.read()
+    if len(raw) > 5_000_000:
+        raise HTTPException(status_code=413, detail="file too large (limit 5MB)")
+    try:
+        text = raw.decode("utf-8-sig")  # -sig strips a BOM if the export has one
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")  # Excel exports are frequently not UTF-8
+
+    result = ingest_csv(text)
+    if not result.companies:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No scorable rows found. The file needs at least a company-name "
+                f"column. Columns seen: {', '.join(result.unmapped_columns) or 'none'}."
+            ),
+        )
+
+    resolver = MxResolver()
+    try:
+        for company in result.companies:
+            if company.contacts:
+                company.contacts = await validate_contacts(company.contacts, resolver)
+    finally:
+        await resolver.aclose()
+
+    for company in result.companies:
+        company.data_quality, company.quality_issues = assess(company)
+
+    scored = score_many(result.companies)
+    return {
+        "results": [s.model_dump(mode="json") for s in scored],
+        "total": len(scored),
+        "column_mapping": result.column_mapping,
+        "unmapped_columns": result.unmapped_columns,
+        "fields_present": result.fields_present,
+        "skipped_rows": result.skipped_rows,
+        "source": file.filename or "uploaded list",
+    }
 
 
 @router.get("/meta")
