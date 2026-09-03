@@ -56,9 +56,24 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # `tsc -b`, not `tsc --noEmit`. The root tsconfig is solution-style
+      # (`"files": []` plus references), so plain `tsc --noEmit` compiles zero
+      # files and passes no matter what is in the source — this step sat green
+      # over a deliberate `const x: number = "string"` until it was checked.
       - name: Typecheck
         working-directory: frontend
-        run: npx tsc --noEmit
+        run: npx tsc -b --force
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      # The scoring rule is implemented twice, in Python and in TypeScript, and
+      # a generated fixture is what keeps them honest. That guard only means
+      # something if it runs here as well as on the machine that wrote it.
+      - name: Test
+        working-directory: frontend
+        run: npm test
 
       - name: Build
         working-directory: frontend

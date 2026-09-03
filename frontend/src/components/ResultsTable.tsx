@@ -116,7 +116,7 @@ export function ResultsTable({
         {header("coverage", "Confidence")}
       </div>
 
-      <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={bodyRef} className="relative min-h-0 flex-1 overflow-y-auto">
         {loading
           ? Array.from({ length: 12 }).map((_, i) => (
               <div

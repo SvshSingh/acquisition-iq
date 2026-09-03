@@ -216,10 +216,25 @@ export default function App() {
           />
         ) : null}
 
+        {/* `lg:relative` is load-bearing, not decoration. The weight sliders each
+            carry an `sr-only` description, and Tailwind's `sr-only` is
+            `position: absolute`. Without a positioned ancestor those six
+            paragraphs resolve their containing block to the body, escape this
+            container's `overflow-y-auto`, and extend the *document* to the
+            height of the un-scrolled sidebar — 831px. Under a shorter window
+            that produced a second, full-height scrollbar down the right edge
+            and a band of dead space past the last row: page furniture
+            generated entirely by text nobody can see.
+
+            It replaces `lg:static` rather than adding `relative`, because an
+            unconditional `relative` would collide with the `fixed` in the
+            mobile branch above — two position utilities in one layer, resolved
+            by stylesheet order instead of by intent. Static and relative lay
+            out identically here; only the containing block differs. */}
         <aside
           className={`${
             panelOpen ? "fixed inset-y-0 left-0 z-50 w-72 shadow-2xl" : "hidden"
-          } shrink-0 overflow-y-auto border-r border-[var(--color-rule)] bg-[var(--color-paper)] lg:static lg:z-auto lg:block lg:w-64 lg:shadow-none`}
+          } shrink-0 overflow-y-auto border-r border-[var(--color-rule)] bg-[var(--color-paper)] lg:relative lg:z-auto lg:block lg:w-64 lg:shadow-none`}
         >
           <section className="border-b border-[var(--color-rule)] p-5">
             <div className="flex items-baseline justify-between gap-3">

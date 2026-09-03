@@ -1,0 +1,1500 @@
+{
+  "generatedBy": "backend/scripts/export_scoring_parity.py",
+  "engineVersion": "1.3.0",
+  "note": "Emitted by the Python engine. frontend/src/lib/scoring.test.ts asserts the TypeScript implementation reproduces these exactly; backend/tests/test_scoring_parity.py asserts this file still matches the engine. Regenerate with the script above when the rule changes on purpose.",
+  "cases": [
+    {
+      "label": "rich_default_weights",
+      "scoredCompany": {
+        "company": {
+          "id": "parity-rich",
+          "name": "Whitaker Heating & Cooling",
+          "domain": null,
+          "website": "https://whitakerhvac.example",
+          "website_source": null,
+          "website_evidence": null,
+          "industry": "HVAC",
+          "naics": null,
+          "city": "Glendale",
+          "state": null,
+          "country": "US",
+          "postcode": "91203",
+          "latitude": null,
+          "longitude": null,
+          "employee_count": 38,
+          "employee_count_is_estimate": true,
+          "revenue_usd": 5200000.0,
+          "revenue_is_estimate": true,
+          "founded_year": 1979,
+          "business_type": "Sole Owner",
+          "has_employees": true,
+          "licence_number": null,
+          "licence_issued": null,
+          "licence_classifications": [],
+          "contacts": [
+            {
+              "name": "Dale Whitaker",
+              "title": "Owner",
+              "email": "dale@whitakerhvac.example",
+              "email_status": "verified",
+              "phone": "+16145550142",
+              "phone_valid": true,
+              "linkedin_url": null,
+              "is_decision_maker": true
+            }
+          ],
+          "web": {
+            "fetched_at": "2026-09-01T00:00:00Z",
+            "https": false,
+            "mobile_viewport": false,
+            "has_analytics": false,
+            "generator": null,
+            "copyright_year": 2016,
+            "latest_content_year": 2016,
+            "page_bytes": 41000,
+            "tech_hints": [
+              "FrontPage"
+            ],
+            "has_careers_page": false,
+            "has_team_page": true,
+            "founded_year": null,
+            "owner_mentions": [],
+            "pe_backed_mentions": [],
+            "raw_text_excerpt": "A family-owned business serving central Ohio since 1979."
+          },
+          "peer_count_in_niche": 22,
+          "sibling_location_count": null,
+          "source": "unknown",
+          "source_url": null,
+          "first_seen": null,
+          "last_refreshed": null,
+          "data_quality": null,
+          "quality_issues": []
+        },
+        "score": {
+          "company_id": "parity-rich",
+          "score": 87.3,
+          "confidence": "high",
+          "factors": [
+            {
+              "key": "succession",
+              "label": "Succession signal",
+              "score": 92.2,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Ownership form: Sole Owner",
+                  "detail": "Filed with the licensing board as a sole proprietorship. One identifiable owner, so a sale is a personal decision rather than a board's \u2014 the cleanest succession signal available.",
+                  "source_url": null,
+                  "impact": 28.0
+                },
+                {
+                  "label": "Long-established business",
+                  "detail": "Founded 1979 \u2014 47 years of trading, consistent with an owner approaching retirement.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 21.2
+                },
+                {
+                  "label": "Named decision maker",
+                  "detail": "Dale Whitaker \u2014 Owner",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 8.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "buy_box",
+              "label": "Buy-box fit",
+              "score": 100.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Headcount",
+                  "detail": "estimated 38 employees against a 10-100 target band.",
+                  "source_url": null,
+                  "impact": 50.0
+                },
+                {
+                  "label": "Revenue",
+                  "detail": "estimated $5,200,000 against a $1,000,000-$10,000,000 target band.",
+                  "source_url": null,
+                  "impact": 50.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "digital_gap",
+              "label": "Digital maturity gap",
+              "score": 89.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "No HTTPS",
+                  "detail": "Site served over plain HTTP.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 11.0
+                },
+                {
+                  "label": "No mobile viewport",
+                  "detail": "Page is not mobile-responsive.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 13.0
+                },
+                {
+                  "label": "No analytics",
+                  "detail": "No analytics tag detected \u2014 the owner is flying blind on demand.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 9.0
+                },
+                {
+                  "label": "Legacy site technology",
+                  "detail": "Detected frontpage.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 13.0
+                },
+                {
+                  "label": "Stale content",
+                  "detail": "Most recent dated content is from 2016 \u2014 10 years out of date.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 15.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "fragmentation",
+              "label": "Niche fragmentation",
+              "score": 90.0,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Peer density",
+                  "detail": "22 comparable operators found in Glendale. Well-fragmented niche \u2014 strong roll-up and consolidation thesis.",
+                  "source_url": null,
+                  "impact": 40.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "contactability",
+              "label": "Contactability",
+              "score": 82.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Email",
+                  "detail": "Domain publishes a live mail exchanger and the address is well-formed. Mailbox existence not probed.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 30.0
+                },
+                {
+                  "label": "Phone",
+                  "detail": "Valid, normalised to E.164.",
+                  "source_url": null,
+                  "impact": 22.0
+                },
+                {
+                  "label": "Decision maker identified",
+                  "detail": "Dale Whitaker \u2014 Owner. Outreach can go straight to the person who can sell.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 30.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "health",
+              "label": "Business health",
+              "score": 32.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Possibly dormant",
+                  "detail": "No content newer than 2016. Verify the business is still trading.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": -28.0
+                },
+                {
+                  "label": "Team page",
+                  "detail": "Names staff publicly \u2014 useful for mapping the org before outreach.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 10.0
+                }
+              ],
+              "missing_signals": [
+                "hiring signal"
+              ],
+              "measured": true
+            }
+          ],
+          "weights": {
+            "succession": 0.28,
+            "buy_box": 0.24,
+            "digital_gap": 0.16,
+            "fragmentation": 0.12,
+            "contactability": 0.12,
+            "health": 0.08
+          },
+          "effective_weights": {
+            "succession": 0.28,
+            "buy_box": 0.24,
+            "digital_gap": 0.16,
+            "fragmentation": 0.12,
+            "contactability": 0.12,
+            "health": 0.08
+          },
+          "covered_weight": 1.0,
+          "scored_at": "2026-09-01T00:00:00Z",
+          "engine_version": "1.3.0"
+        }
+      },
+      "weights": {
+        "succession": 0.28,
+        "buy_box": 0.24,
+        "digital_gap": 0.16,
+        "fragmentation": 0.12,
+        "contactability": 0.12,
+        "health": 0.08
+      },
+      "expected": {
+        "score": 87.3,
+        "confidence": "high",
+        "coveredWeight": 1.0,
+        "effectiveWeights": {
+          "succession": 0.28,
+          "buy_box": 0.24,
+          "digital_gap": 0.16,
+          "fragmentation": 0.12,
+          "contactability": 0.12,
+          "health": 0.08
+        },
+        "contributions": {
+          "succession": 25.816,
+          "buy_box": 24.0,
+          "digital_gap": 14.24,
+          "fragmentation": 10.8,
+          "contactability": 9.84,
+          "health": 2.56
+        }
+      }
+    },
+    {
+      "label": "rich_succession_heavy",
+      "scoredCompany": {
+        "company": {
+          "id": "parity-rich",
+          "name": "Whitaker Heating & Cooling",
+          "domain": null,
+          "website": "https://whitakerhvac.example",
+          "website_source": null,
+          "website_evidence": null,
+          "industry": "HVAC",
+          "naics": null,
+          "city": "Glendale",
+          "state": null,
+          "country": "US",
+          "postcode": "91203",
+          "latitude": null,
+          "longitude": null,
+          "employee_count": 38,
+          "employee_count_is_estimate": true,
+          "revenue_usd": 5200000.0,
+          "revenue_is_estimate": true,
+          "founded_year": 1979,
+          "business_type": "Sole Owner",
+          "has_employees": true,
+          "licence_number": null,
+          "licence_issued": null,
+          "licence_classifications": [],
+          "contacts": [
+            {
+              "name": "Dale Whitaker",
+              "title": "Owner",
+              "email": "dale@whitakerhvac.example",
+              "email_status": "verified",
+              "phone": "+16145550142",
+              "phone_valid": true,
+              "linkedin_url": null,
+              "is_decision_maker": true
+            }
+          ],
+          "web": {
+            "fetched_at": "2026-09-01T00:00:00Z",
+            "https": false,
+            "mobile_viewport": false,
+            "has_analytics": false,
+            "generator": null,
+            "copyright_year": 2016,
+            "latest_content_year": 2016,
+            "page_bytes": 41000,
+            "tech_hints": [
+              "FrontPage"
+            ],
+            "has_careers_page": false,
+            "has_team_page": true,
+            "founded_year": null,
+            "owner_mentions": [],
+            "pe_backed_mentions": [],
+            "raw_text_excerpt": "A family-owned business serving central Ohio since 1979."
+          },
+          "peer_count_in_niche": 22,
+          "sibling_location_count": null,
+          "source": "unknown",
+          "source_url": null,
+          "first_seen": null,
+          "last_refreshed": null,
+          "data_quality": null,
+          "quality_issues": []
+        },
+        "score": {
+          "company_id": "parity-rich",
+          "score": 92.2,
+          "confidence": "high",
+          "factors": [
+            {
+              "key": "succession",
+              "label": "Succession signal",
+              "score": 92.2,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Ownership form: Sole Owner",
+                  "detail": "Filed with the licensing board as a sole proprietorship. One identifiable owner, so a sale is a personal decision rather than a board's \u2014 the cleanest succession signal available.",
+                  "source_url": null,
+                  "impact": 28.0
+                },
+                {
+                  "label": "Long-established business",
+                  "detail": "Founded 1979 \u2014 47 years of trading, consistent with an owner approaching retirement.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 21.2
+                },
+                {
+                  "label": "Named decision maker",
+                  "detail": "Dale Whitaker \u2014 Owner",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 8.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "buy_box",
+              "label": "Buy-box fit",
+              "score": 100.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Headcount",
+                  "detail": "estimated 38 employees against a 10-100 target band.",
+                  "source_url": null,
+                  "impact": 50.0
+                },
+                {
+                  "label": "Revenue",
+                  "detail": "estimated $5,200,000 against a $1,000,000-$10,000,000 target band.",
+                  "source_url": null,
+                  "impact": 50.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "digital_gap",
+              "label": "Digital maturity gap",
+              "score": 89.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "No HTTPS",
+                  "detail": "Site served over plain HTTP.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 11.0
+                },
+                {
+                  "label": "No mobile viewport",
+                  "detail": "Page is not mobile-responsive.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 13.0
+                },
+                {
+                  "label": "No analytics",
+                  "detail": "No analytics tag detected \u2014 the owner is flying blind on demand.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 9.0
+                },
+                {
+                  "label": "Legacy site technology",
+                  "detail": "Detected frontpage.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 13.0
+                },
+                {
+                  "label": "Stale content",
+                  "detail": "Most recent dated content is from 2016 \u2014 10 years out of date.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 15.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "fragmentation",
+              "label": "Niche fragmentation",
+              "score": 90.0,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Peer density",
+                  "detail": "22 comparable operators found in Glendale. Well-fragmented niche \u2014 strong roll-up and consolidation thesis.",
+                  "source_url": null,
+                  "impact": 40.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "contactability",
+              "label": "Contactability",
+              "score": 82.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Email",
+                  "detail": "Domain publishes a live mail exchanger and the address is well-formed. Mailbox existence not probed.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 30.0
+                },
+                {
+                  "label": "Phone",
+                  "detail": "Valid, normalised to E.164.",
+                  "source_url": null,
+                  "impact": 22.0
+                },
+                {
+                  "label": "Decision maker identified",
+                  "detail": "Dale Whitaker \u2014 Owner. Outreach can go straight to the person who can sell.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 30.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "health",
+              "label": "Business health",
+              "score": 32.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Possibly dormant",
+                  "detail": "No content newer than 2016. Verify the business is still trading.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": -28.0
+                },
+                {
+                  "label": "Team page",
+                  "detail": "Names staff publicly \u2014 useful for mapping the org before outreach.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 10.0
+                }
+              ],
+              "missing_signals": [
+                "hiring signal"
+              ],
+              "measured": true
+            }
+          ],
+          "weights": {
+            "succession": 1.0,
+            "buy_box": 0.0,
+            "digital_gap": 0.0,
+            "fragmentation": 0.0,
+            "contactability": 0.0,
+            "health": 0.0
+          },
+          "effective_weights": {
+            "succession": 1.0,
+            "buy_box": 0.0,
+            "digital_gap": 0.0,
+            "fragmentation": 0.0,
+            "contactability": 0.0,
+            "health": 0.0
+          },
+          "covered_weight": 1.0,
+          "scored_at": "2026-09-01T00:00:00Z",
+          "engine_version": "1.3.0"
+        }
+      },
+      "weights": {
+        "succession": 1.0,
+        "buy_box": 0.0,
+        "digital_gap": 0.0,
+        "fragmentation": 0.0,
+        "contactability": 0.0,
+        "health": 0.0
+      },
+      "expected": {
+        "score": 92.2,
+        "confidence": "high",
+        "coveredWeight": 1.0,
+        "effectiveWeights": {
+          "succession": 1.0,
+          "buy_box": 0.0,
+          "digital_gap": 0.0,
+          "fragmentation": 0.0,
+          "contactability": 0.0,
+          "health": 0.0
+        },
+        "contributions": {
+          "succession": 92.2,
+          "buy_box": 0.0,
+          "digital_gap": 0.0,
+          "fragmentation": 0.0,
+          "contactability": 0.0,
+          "health": 0.0
+        }
+      }
+    },
+    {
+      "label": "licence_only_default",
+      "scoredCompany": {
+        "company": {
+          "id": "parity-licence-only",
+          "name": "Corner Plumbing",
+          "domain": null,
+          "website": null,
+          "website_source": null,
+          "website_evidence": null,
+          "industry": "Plumbing",
+          "naics": null,
+          "city": "Burbank",
+          "state": null,
+          "country": "US",
+          "postcode": "91502",
+          "latitude": null,
+          "longitude": null,
+          "employee_count": null,
+          "employee_count_is_estimate": true,
+          "revenue_usd": null,
+          "revenue_is_estimate": true,
+          "founded_year": 1988,
+          "business_type": "Sole Owner",
+          "has_employees": true,
+          "licence_number": null,
+          "licence_issued": null,
+          "licence_classifications": [],
+          "contacts": [
+            {
+              "name": null,
+              "title": null,
+              "email": null,
+              "email_status": "unknown",
+              "phone": "+16145550143",
+              "phone_valid": true,
+              "linkedin_url": null,
+              "is_decision_maker": false
+            }
+          ],
+          "web": {
+            "fetched_at": null,
+            "https": null,
+            "mobile_viewport": null,
+            "has_analytics": null,
+            "generator": null,
+            "copyright_year": null,
+            "latest_content_year": null,
+            "page_bytes": null,
+            "tech_hints": [],
+            "has_careers_page": false,
+            "has_team_page": false,
+            "founded_year": null,
+            "owner_mentions": [],
+            "pe_backed_mentions": [],
+            "raw_text_excerpt": null
+          },
+          "peer_count_in_niche": 14,
+          "sibling_location_count": null,
+          "source": "unknown",
+          "source_url": null,
+          "first_seen": null,
+          "last_refreshed": null,
+          "data_quality": null,
+          "quality_issues": []
+        },
+        "score": {
+          "company_id": "parity-licence-only",
+          "score": 64.1,
+          "confidence": "low",
+          "factors": [
+            {
+              "key": "succession",
+              "label": "Succession signal",
+              "score": 78.8,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Ownership form: Sole Owner",
+                  "detail": "Filed with the licensing board as a sole proprietorship. One identifiable owner, so a sale is a personal decision rather than a board's \u2014 the cleanest succession signal available.",
+                  "source_url": null,
+                  "impact": 28.0
+                },
+                {
+                  "label": "Long-established business",
+                  "detail": "Founded 1988 \u2014 38 years of trading, consistent with an owner approaching retirement.",
+                  "source_url": null,
+                  "impact": 15.8
+                }
+              ],
+              "missing_signals": [
+                "website text",
+                "named owner or principal"
+              ],
+              "measured": true
+            },
+            {
+              "key": "buy_box",
+              "label": "Buy-box fit",
+              "score": 55.0,
+              "confidence": "low",
+              "evidence": [
+                {
+                  "label": "Employs staff",
+                  "detail": "Licence carries active workers' compensation cover, which California requires of any licensee with employees. Confirms at least one member of staff, but the filing does not say how many \u2014 so this places the business in the band, not at a point in it.",
+                  "source_url": null,
+                  "impact": 5.0
+                }
+              ],
+              "missing_signals": [
+                "exact headcount",
+                "revenue estimate"
+              ],
+              "measured": true
+            },
+            {
+              "key": "digital_gap",
+              "label": "Digital maturity gap",
+              "score": 50.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "website",
+                "site technology",
+                "content freshness"
+              ],
+              "measured": false
+            },
+            {
+              "key": "fragmentation",
+              "label": "Niche fragmentation",
+              "score": 90.0,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Peer density",
+                  "detail": "14 comparable operators found in Burbank. Well-fragmented niche \u2014 strong roll-up and consolidation thesis.",
+                  "source_url": null,
+                  "impact": 40.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "contactability",
+              "label": "Contactability",
+              "score": 22.0,
+              "confidence": "low",
+              "evidence": [
+                {
+                  "label": "Phone",
+                  "detail": "Valid, normalised to E.164.",
+                  "source_url": null,
+                  "impact": 22.0
+                }
+              ],
+              "missing_signals": [
+                "email address",
+                "named contact"
+              ],
+              "measured": true
+            },
+            {
+              "key": "health",
+              "label": "Business health",
+              "score": 50.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "content dates",
+                "hiring signal",
+                "reachable website"
+              ],
+              "measured": false
+            }
+          ],
+          "weights": {
+            "succession": 0.28,
+            "buy_box": 0.24,
+            "digital_gap": 0.16,
+            "fragmentation": 0.12,
+            "contactability": 0.12,
+            "health": 0.08
+          },
+          "effective_weights": {
+            "succession": 0.368421052631579,
+            "buy_box": 0.3157894736842105,
+            "digital_gap": 0.0,
+            "fragmentation": 0.15789473684210525,
+            "contactability": 0.15789473684210525,
+            "health": 0.0
+          },
+          "covered_weight": 0.76,
+          "scored_at": "2026-09-01T00:00:00Z",
+          "engine_version": "1.3.0"
+        }
+      },
+      "weights": {
+        "succession": 0.28,
+        "buy_box": 0.24,
+        "digital_gap": 0.16,
+        "fragmentation": 0.12,
+        "contactability": 0.12,
+        "health": 0.08
+      },
+      "expected": {
+        "score": 64.1,
+        "confidence": "low",
+        "coveredWeight": 0.76,
+        "effectiveWeights": {
+          "succession": 0.3684210526,
+          "buy_box": 0.3157894737,
+          "digital_gap": 0.0,
+          "fragmentation": 0.1578947368,
+          "contactability": 0.1578947368,
+          "health": 0.0
+        },
+        "contributions": {
+          "succession": 29.0315789474,
+          "buy_box": 17.3684210526,
+          "digital_gap": 0.0,
+          "fragmentation": 14.2105263158,
+          "contactability": 3.4736842105,
+          "health": 0.0
+        }
+      }
+    },
+    {
+      "label": "licence_only_succession_heavy",
+      "scoredCompany": {
+        "company": {
+          "id": "parity-licence-only",
+          "name": "Corner Plumbing",
+          "domain": null,
+          "website": null,
+          "website_source": null,
+          "website_evidence": null,
+          "industry": "Plumbing",
+          "naics": null,
+          "city": "Burbank",
+          "state": null,
+          "country": "US",
+          "postcode": "91502",
+          "latitude": null,
+          "longitude": null,
+          "employee_count": null,
+          "employee_count_is_estimate": true,
+          "revenue_usd": null,
+          "revenue_is_estimate": true,
+          "founded_year": 1988,
+          "business_type": "Sole Owner",
+          "has_employees": true,
+          "licence_number": null,
+          "licence_issued": null,
+          "licence_classifications": [],
+          "contacts": [
+            {
+              "name": null,
+              "title": null,
+              "email": null,
+              "email_status": "unknown",
+              "phone": "+16145550143",
+              "phone_valid": true,
+              "linkedin_url": null,
+              "is_decision_maker": false
+            }
+          ],
+          "web": {
+            "fetched_at": null,
+            "https": null,
+            "mobile_viewport": null,
+            "has_analytics": null,
+            "generator": null,
+            "copyright_year": null,
+            "latest_content_year": null,
+            "page_bytes": null,
+            "tech_hints": [],
+            "has_careers_page": false,
+            "has_team_page": false,
+            "founded_year": null,
+            "owner_mentions": [],
+            "pe_backed_mentions": [],
+            "raw_text_excerpt": null
+          },
+          "peer_count_in_niche": 14,
+          "sibling_location_count": null,
+          "source": "unknown",
+          "source_url": null,
+          "first_seen": null,
+          "last_refreshed": null,
+          "data_quality": null,
+          "quality_issues": []
+        },
+        "score": {
+          "company_id": "parity-licence-only",
+          "score": 78.8,
+          "confidence": "medium",
+          "factors": [
+            {
+              "key": "succession",
+              "label": "Succession signal",
+              "score": 78.8,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Ownership form: Sole Owner",
+                  "detail": "Filed with the licensing board as a sole proprietorship. One identifiable owner, so a sale is a personal decision rather than a board's \u2014 the cleanest succession signal available.",
+                  "source_url": null,
+                  "impact": 28.0
+                },
+                {
+                  "label": "Long-established business",
+                  "detail": "Founded 1988 \u2014 38 years of trading, consistent with an owner approaching retirement.",
+                  "source_url": null,
+                  "impact": 15.8
+                }
+              ],
+              "missing_signals": [
+                "website text",
+                "named owner or principal"
+              ],
+              "measured": true
+            },
+            {
+              "key": "buy_box",
+              "label": "Buy-box fit",
+              "score": 55.0,
+              "confidence": "low",
+              "evidence": [
+                {
+                  "label": "Employs staff",
+                  "detail": "Licence carries active workers' compensation cover, which California requires of any licensee with employees. Confirms at least one member of staff, but the filing does not say how many \u2014 so this places the business in the band, not at a point in it.",
+                  "source_url": null,
+                  "impact": 5.0
+                }
+              ],
+              "missing_signals": [
+                "exact headcount",
+                "revenue estimate"
+              ],
+              "measured": true
+            },
+            {
+              "key": "digital_gap",
+              "label": "Digital maturity gap",
+              "score": 50.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "website",
+                "site technology",
+                "content freshness"
+              ],
+              "measured": false
+            },
+            {
+              "key": "fragmentation",
+              "label": "Niche fragmentation",
+              "score": 90.0,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Peer density",
+                  "detail": "14 comparable operators found in Burbank. Well-fragmented niche \u2014 strong roll-up and consolidation thesis.",
+                  "source_url": null,
+                  "impact": 40.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "contactability",
+              "label": "Contactability",
+              "score": 22.0,
+              "confidence": "low",
+              "evidence": [
+                {
+                  "label": "Phone",
+                  "detail": "Valid, normalised to E.164.",
+                  "source_url": null,
+                  "impact": 22.0
+                }
+              ],
+              "missing_signals": [
+                "email address",
+                "named contact"
+              ],
+              "measured": true
+            },
+            {
+              "key": "health",
+              "label": "Business health",
+              "score": 50.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "content dates",
+                "hiring signal",
+                "reachable website"
+              ],
+              "measured": false
+            }
+          ],
+          "weights": {
+            "succession": 1.0,
+            "buy_box": 0.0,
+            "digital_gap": 0.0,
+            "fragmentation": 0.0,
+            "contactability": 0.0,
+            "health": 0.0
+          },
+          "effective_weights": {
+            "succession": 1.0,
+            "buy_box": 0.0,
+            "digital_gap": 0.0,
+            "fragmentation": 0.0,
+            "contactability": 0.0,
+            "health": 0.0
+          },
+          "covered_weight": 1.0,
+          "scored_at": "2026-09-01T00:00:00Z",
+          "engine_version": "1.3.0"
+        }
+      },
+      "weights": {
+        "succession": 1.0,
+        "buy_box": 0.0,
+        "digital_gap": 0.0,
+        "fragmentation": 0.0,
+        "contactability": 0.0,
+        "health": 0.0
+      },
+      "expected": {
+        "score": 78.8,
+        "confidence": "medium",
+        "coveredWeight": 1.0,
+        "effectiveWeights": {
+          "succession": 1.0,
+          "buy_box": 0.0,
+          "digital_gap": 0.0,
+          "fragmentation": 0.0,
+          "contactability": 0.0,
+          "health": 0.0
+        },
+        "contributions": {
+          "succession": 78.8,
+          "buy_box": 0.0,
+          "digital_gap": 0.0,
+          "fragmentation": 0.0,
+          "contactability": 0.0,
+          "health": 0.0
+        }
+      }
+    },
+    {
+      "label": "sparse_below_coverage_floor",
+      "scoredCompany": {
+        "company": {
+          "id": "parity-sparse",
+          "name": "Unknown Services LLC",
+          "domain": null,
+          "website": null,
+          "website_source": null,
+          "website_evidence": null,
+          "industry": null,
+          "naics": null,
+          "city": null,
+          "state": null,
+          "country": "US",
+          "postcode": null,
+          "latitude": null,
+          "longitude": null,
+          "employee_count": null,
+          "employee_count_is_estimate": true,
+          "revenue_usd": null,
+          "revenue_is_estimate": true,
+          "founded_year": null,
+          "business_type": null,
+          "has_employees": null,
+          "licence_number": null,
+          "licence_issued": null,
+          "licence_classifications": [],
+          "contacts": [],
+          "web": {
+            "fetched_at": null,
+            "https": null,
+            "mobile_viewport": null,
+            "has_analytics": null,
+            "generator": null,
+            "copyright_year": null,
+            "latest_content_year": null,
+            "page_bytes": null,
+            "tech_hints": [],
+            "has_careers_page": false,
+            "has_team_page": false,
+            "founded_year": null,
+            "owner_mentions": [],
+            "pe_backed_mentions": [],
+            "raw_text_excerpt": null
+          },
+          "peer_count_in_niche": null,
+          "sibling_location_count": null,
+          "source": "unknown",
+          "source_url": null,
+          "first_seen": null,
+          "last_refreshed": null,
+          "data_quality": null,
+          "quality_issues": []
+        },
+        "score": {
+          "company_id": "parity-sparse",
+          "score": 34.4,
+          "confidence": "low",
+          "factors": [
+            {
+              "key": "succession",
+              "label": "Succession signal",
+              "score": 35.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "ownership evidence",
+                "founding year",
+                "website text",
+                "named owner or principal"
+              ],
+              "measured": false
+            },
+            {
+              "key": "buy_box",
+              "label": "Buy-box fit",
+              "score": 30.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "employee count",
+                "revenue estimate"
+              ],
+              "measured": false
+            },
+            {
+              "key": "digital_gap",
+              "label": "Digital maturity gap",
+              "score": 50.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "website",
+                "site technology",
+                "content freshness"
+              ],
+              "measured": false
+            },
+            {
+              "key": "fragmentation",
+              "label": "Niche fragmentation",
+              "score": 45.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "peer density in niche"
+              ],
+              "measured": false
+            },
+            {
+              "key": "contactability",
+              "label": "Contactability",
+              "score": 0.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "email address",
+                "phone number",
+                "named contact"
+              ],
+              "measured": true
+            },
+            {
+              "key": "health",
+              "label": "Business health",
+              "score": 50.0,
+              "confidence": "low",
+              "evidence": [],
+              "missing_signals": [
+                "content dates",
+                "hiring signal",
+                "reachable website"
+              ],
+              "measured": false
+            }
+          ],
+          "weights": {
+            "succession": 0.28,
+            "buy_box": 0.24,
+            "digital_gap": 0.16,
+            "fragmentation": 0.12,
+            "contactability": 0.12,
+            "health": 0.08
+          },
+          "effective_weights": {
+            "succession": 0.28,
+            "buy_box": 0.24,
+            "digital_gap": 0.16,
+            "fragmentation": 0.12,
+            "contactability": 0.12,
+            "health": 0.08
+          },
+          "covered_weight": 0.12,
+          "scored_at": "2026-09-01T00:00:00Z",
+          "engine_version": "1.3.0"
+        }
+      },
+      "weights": {
+        "succession": 0.28,
+        "buy_box": 0.24,
+        "digital_gap": 0.16,
+        "fragmentation": 0.12,
+        "contactability": 0.12,
+        "health": 0.08
+      },
+      "expected": {
+        "score": 34.4,
+        "confidence": "low",
+        "coveredWeight": 0.12,
+        "effectiveWeights": {
+          "succession": 0.28,
+          "buy_box": 0.24,
+          "digital_gap": 0.16,
+          "fragmentation": 0.12,
+          "contactability": 0.12,
+          "health": 0.08
+        },
+        "contributions": {
+          "succession": 9.8,
+          "buy_box": 7.2,
+          "digital_gap": 8.0,
+          "fragmentation": 5.4,
+          "contactability": 0.0,
+          "health": 4.0
+        }
+      }
+    },
+    {
+      "label": "rich_all_zero_weights",
+      "scoredCompany": {
+        "company": {
+          "id": "parity-rich",
+          "name": "Whitaker Heating & Cooling",
+          "domain": null,
+          "website": "https://whitakerhvac.example",
+          "website_source": null,
+          "website_evidence": null,
+          "industry": "HVAC",
+          "naics": null,
+          "city": "Glendale",
+          "state": null,
+          "country": "US",
+          "postcode": "91203",
+          "latitude": null,
+          "longitude": null,
+          "employee_count": 38,
+          "employee_count_is_estimate": true,
+          "revenue_usd": 5200000.0,
+          "revenue_is_estimate": true,
+          "founded_year": 1979,
+          "business_type": "Sole Owner",
+          "has_employees": true,
+          "licence_number": null,
+          "licence_issued": null,
+          "licence_classifications": [],
+          "contacts": [
+            {
+              "name": "Dale Whitaker",
+              "title": "Owner",
+              "email": "dale@whitakerhvac.example",
+              "email_status": "verified",
+              "phone": "+16145550142",
+              "phone_valid": true,
+              "linkedin_url": null,
+              "is_decision_maker": true
+            }
+          ],
+          "web": {
+            "fetched_at": "2026-09-01T00:00:00Z",
+            "https": false,
+            "mobile_viewport": false,
+            "has_analytics": false,
+            "generator": null,
+            "copyright_year": 2016,
+            "latest_content_year": 2016,
+            "page_bytes": 41000,
+            "tech_hints": [
+              "FrontPage"
+            ],
+            "has_careers_page": false,
+            "has_team_page": true,
+            "founded_year": null,
+            "owner_mentions": [],
+            "pe_backed_mentions": [],
+            "raw_text_excerpt": "A family-owned business serving central Ohio since 1979."
+          },
+          "peer_count_in_niche": 22,
+          "sibling_location_count": null,
+          "source": "unknown",
+          "source_url": null,
+          "first_seen": null,
+          "last_refreshed": null,
+          "data_quality": null,
+          "quality_issues": []
+        },
+        "score": {
+          "company_id": "parity-rich",
+          "score": 80.9,
+          "confidence": "high",
+          "factors": [
+            {
+              "key": "succession",
+              "label": "Succession signal",
+              "score": 92.2,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Ownership form: Sole Owner",
+                  "detail": "Filed with the licensing board as a sole proprietorship. One identifiable owner, so a sale is a personal decision rather than a board's \u2014 the cleanest succession signal available.",
+                  "source_url": null,
+                  "impact": 28.0
+                },
+                {
+                  "label": "Long-established business",
+                  "detail": "Founded 1979 \u2014 47 years of trading, consistent with an owner approaching retirement.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 21.2
+                },
+                {
+                  "label": "Named decision maker",
+                  "detail": "Dale Whitaker \u2014 Owner",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 8.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "buy_box",
+              "label": "Buy-box fit",
+              "score": 100.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Headcount",
+                  "detail": "estimated 38 employees against a 10-100 target band.",
+                  "source_url": null,
+                  "impact": 50.0
+                },
+                {
+                  "label": "Revenue",
+                  "detail": "estimated $5,200,000 against a $1,000,000-$10,000,000 target band.",
+                  "source_url": null,
+                  "impact": 50.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "digital_gap",
+              "label": "Digital maturity gap",
+              "score": 89.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "No HTTPS",
+                  "detail": "Site served over plain HTTP.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 11.0
+                },
+                {
+                  "label": "No mobile viewport",
+                  "detail": "Page is not mobile-responsive.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 13.0
+                },
+                {
+                  "label": "No analytics",
+                  "detail": "No analytics tag detected \u2014 the owner is flying blind on demand.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 9.0
+                },
+                {
+                  "label": "Legacy site technology",
+                  "detail": "Detected frontpage.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 13.0
+                },
+                {
+                  "label": "Stale content",
+                  "detail": "Most recent dated content is from 2016 \u2014 10 years out of date.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 15.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "fragmentation",
+              "label": "Niche fragmentation",
+              "score": 90.0,
+              "confidence": "medium",
+              "evidence": [
+                {
+                  "label": "Peer density",
+                  "detail": "22 comparable operators found in Glendale. Well-fragmented niche \u2014 strong roll-up and consolidation thesis.",
+                  "source_url": null,
+                  "impact": 40.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "contactability",
+              "label": "Contactability",
+              "score": 82.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Email",
+                  "detail": "Domain publishes a live mail exchanger and the address is well-formed. Mailbox existence not probed.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 30.0
+                },
+                {
+                  "label": "Phone",
+                  "detail": "Valid, normalised to E.164.",
+                  "source_url": null,
+                  "impact": 22.0
+                },
+                {
+                  "label": "Decision maker identified",
+                  "detail": "Dale Whitaker \u2014 Owner. Outreach can go straight to the person who can sell.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 30.0
+                }
+              ],
+              "missing_signals": [],
+              "measured": true
+            },
+            {
+              "key": "health",
+              "label": "Business health",
+              "score": 32.0,
+              "confidence": "high",
+              "evidence": [
+                {
+                  "label": "Possibly dormant",
+                  "detail": "No content newer than 2016. Verify the business is still trading.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": -28.0
+                },
+                {
+                  "label": "Team page",
+                  "detail": "Names staff publicly \u2014 useful for mapping the org before outreach.",
+                  "source_url": "https://whitakerhvac.example",
+                  "impact": 10.0
+                }
+              ],
+              "missing_signals": [
+                "hiring signal"
+              ],
+              "measured": true
+            }
+          ],
+          "weights": {
+            "succession": 0.0,
+            "buy_box": 0.0,
+            "digital_gap": 0.0,
+            "fragmentation": 0.0,
+            "contactability": 0.0,
+            "health": 0.0
+          },
+          "effective_weights": {
+            "succession": 0.16666666666666669,
+            "buy_box": 0.16666666666666669,
+            "digital_gap": 0.16666666666666669,
+            "fragmentation": 0.16666666666666669,
+            "contactability": 0.16666666666666669,
+            "health": 0.16666666666666669
+          },
+          "covered_weight": 1.0,
+          "scored_at": "2026-09-01T00:00:00Z",
+          "engine_version": "1.3.0"
+        }
+      },
+      "weights": {
+        "succession": 0.0,
+        "buy_box": 0.0,
+        "digital_gap": 0.0,
+        "fragmentation": 0.0,
+        "contactability": 0.0,
+        "health": 0.0
+      },
+      "expected": {
+        "score": 80.9,
+        "confidence": "high",
+        "coveredWeight": 1.0,
+        "effectiveWeights": {
+          "succession": 0.1666666667,
+          "buy_box": 0.1666666667,
+          "digital_gap": 0.1666666667,
+          "fragmentation": 0.1666666667,
+          "contactability": 0.1666666667,
+          "health": 0.1666666667
+        },
+        "contributions": {
+          "succession": 15.3666666667,
+          "buy_box": 16.6666666667,
+          "digital_gap": 14.8333333333,
+          "fragmentation": 15.0,
+          "contactability": 13.6666666667,
+          "health": 5.3333333333
+        }
+      }
+    }
+  ]
+}

@@ -195,7 +195,7 @@ export function DetailDrawer({
         ) : null}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative min-h-0 flex-1 overflow-y-auto">
         <FiledFacts company={company} />
 
         <section className="px-6 py-5">

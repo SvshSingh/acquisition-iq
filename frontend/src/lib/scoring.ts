@@ -16,10 +16,13 @@
  *  the two implementations ever drift, the UI shows a number the API would not
  *  reproduce, and the whole "you can audit this score" claim collapses.
  *
- *  **This is currently guarded only by the backend's golden-file test, not by
- *  anything on this side.** There are no frontend tests. Any change to the
- *  redistribution rule has to be made in both files by hand, and the honest
- *  next step is a shared fixture both suites read.
+ *  The two are held together by a generated fixture rather than by care.
+ *  `backend/scripts/export_scoring_parity.py` runs the real engine over cases
+ *  chosen for the branches that differ — full coverage, partial coverage,
+ *  coverage under the floor, all-zero weights — and records its answers.
+ *  `scoring.test.ts` asserts this file reproduces them; the backend's
+ *  `test_scoring_parity.py` asserts the fixture still matches the engine.
+ *  Change the rule on either side alone and a suite goes red.
  */
 
 import type { Confidence, FactorKey, ScoredCompany, Weights } from "./types";
