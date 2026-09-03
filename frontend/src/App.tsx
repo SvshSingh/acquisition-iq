@@ -24,6 +24,10 @@ export default function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [preset, setPreset] = useState("generic");
+  // Below the `lg` breakpoint the filter and weights column has nowhere to sit
+  // beside the table, so it becomes a sheet the user opens. Hiding it outright
+  // would remove the thesis controls entirely, which are half the product.
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   const search = useQuery({
@@ -75,6 +79,16 @@ export default function App() {
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center justify-between gap-6 border-b border-[var(--color-rule)] px-5 py-3">
         <div className="flex items-baseline gap-3">
+          <button
+            type="button"
+            onClick={() => setPanelOpen(true)}
+            aria-label="Open filters and thesis weights"
+            className="-ml-1 rounded p-1.5 text-[var(--color-ink-soft)] hover:bg-[var(--color-surface)] hover:text-[var(--color-ink)] lg:hidden"
+          >
+            <svg viewBox="0 0 16 16" className="size-4" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 4h12M2 8h12M2 12h8" strokeLinecap="round" />
+            </svg>
+          </button>
           <h1 className="text-[15px] font-semibold tracking-tight">AcquisitionIQ</h1>
           <p className="hidden text-[12px] text-[var(--color-ink-faint)] sm:block">
             Acquisition-fit scoring for search funds
@@ -108,7 +122,20 @@ export default function App() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-[var(--color-rule)] lg:block">
+        {panelOpen ? (
+          <button
+            type="button"
+            aria-label="Close filters"
+            onClick={() => setPanelOpen(false)}
+            className="fixed inset-0 z-40 cursor-default bg-black/40 lg:hidden"
+          />
+        ) : null}
+
+        <aside
+          className={`${
+            panelOpen ? "fixed inset-y-0 left-0 z-50 w-72 shadow-2xl" : "hidden"
+          } shrink-0 overflow-y-auto border-r border-[var(--color-rule)] bg-[var(--color-paper)] lg:static lg:z-auto lg:block lg:w-64 lg:shadow-none`}
+        >
           <section className="border-b border-[var(--color-rule)] p-5">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-soft)]">
               Filter
@@ -197,14 +224,26 @@ export default function App() {
           )}
         </main>
 
+        {/* The breakdown is the product, so it must open at every width. It sits
+            beside the table from `xl` and slides over it below that — the
+            previous version was `hidden xl:block`, which meant a click on a row
+            in a smaller window did nothing at all and the app looked broken. */}
         {open ? (
-          <aside className="hidden w-[26rem] shrink-0 xl:block">
-            <DetailDrawer
-              item={open.item}
-              rescored={open.rescored}
-              onClose={() => setOpenId(null)}
+          <>
+            <button
+              type="button"
+              aria-label="Close breakdown"
+              onClick={() => setOpenId(null)}
+              className="fixed inset-0 z-40 cursor-default bg-black/40 xl:hidden"
             />
-          </aside>
+            <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-[26rem] shadow-2xl xl:static xl:z-auto xl:w-[26rem] xl:max-w-none xl:shrink-0 xl:shadow-none">
+              <DetailDrawer
+                item={open.item}
+                rescored={open.rescored}
+                onClose={() => setOpenId(null)}
+              />
+            </aside>
+          </>
         ) : null}
       </div>
     </div>
