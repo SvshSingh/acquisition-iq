@@ -67,6 +67,32 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.include_router(companies_router, prefix="/api")
 
 
+@app.get("/", include_in_schema=False)
+def index() -> dict[str, object]:
+    """An index at the root, because people paste API URLs into browsers.
+
+    Every route lives under `/api`, so `/` returned a bare `{"detail":"Not
+    Found"}` — technically correct and useless to a human who has just been
+    handed the link. This says what the service is and where to go next.
+    """
+    _, companies = load_dataset()
+    return {
+        "service": settings.app_name,
+        "description": "Explainable acquisition-fit scoring for search funds.",
+        "engine_version": ENGINE_VERSION,
+        "companies": len(companies),
+        "endpoints": {
+            "interactive_docs": "/docs",
+            "health": "/api/health",
+            "dataset_and_filters": "/api/meta",
+            "search": "/api/companies?limit=10&min_score=60",
+            "one_company": "/api/companies/{id}",
+            "csv_export": "/api/export?preset=hubspot",
+        },
+        "repository": settings.project_url,
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, object]:
     _, companies = load_dataset()
