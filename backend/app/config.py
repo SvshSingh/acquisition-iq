@@ -68,12 +68,13 @@ class Settings(BaseSettings):
         "https://overpass.private.coffee/api/interpreter"
     )
 
-    # Optional LLM pass for qualitative signal extraction. Absent key => the
-    # pipeline degrades to heuristic extraction. Scores never depend on it.
-    anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-4-5"
+    # No LLM settings here, and that is a product decision rather than an
+    # omission. The scoring path is deterministic on purpose: a searcher
+    # committing seven figures cannot audit a model's opinion, and the gap this
+    # fills is precisely that SaaSquatch already ships an opaque AI score. See
+    # the README.
 
-    seed_dataset_path: str = "../data/seed_leads.json"
+    seed_dataset_path: str = "../data/seed_glendale.json"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     @property

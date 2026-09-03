@@ -16,3 +16,7 @@ coverage/
 # Frontend build output and deps
 frontend/dist/
 frontend/node_modules/
+
+# Local working notes, not part of the deliverable
+CLAUDE.md
+.claude/
