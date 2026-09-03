@@ -77,6 +77,17 @@ def _clean(value: Any) -> str | None:
     return text or None
 
 
+def _zip5(value: str | None) -> str | None:
+    """The 5-digit ZIP. CSLB stores ZIP+4 with the separator stripped
+    ("910013754"), which is not a valid postcode to show a user or write to a
+    CSV. Internal callers already trim via normalise_postcode; this keeps the
+    stored value clean too."""
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    return digits[:5] if len(digits) >= 5 else None
+
+
 def _parse_date(value: Any) -> date | None:
     if value is None:
         return None
@@ -164,7 +175,7 @@ def row_to_company(row: dict[str, Any], market: Market) -> Company | None:
         industry=vertical,
         city=city,
         state=_clean(row.get("State")) or market.state,
-        postcode=_clean(row.get("ZIP Code")),
+        postcode=_zip5(_clean(row.get("ZIP Code"))),
         # Licence issue is a *lower bound* on age — an old firm can hold a newer
         # licence. The succession factor is told which it is.
         founded_year=issued.year if issued else None,

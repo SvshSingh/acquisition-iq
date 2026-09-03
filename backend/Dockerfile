@@ -18,6 +18,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY backend/scripts ./scripts
 COPY backend/pyproject.toml ./pyproject.toml
+# Migration tooling travels with the image, so `alembic upgrade head` can be run
+# in the container against a real database. Without these the schema-management
+# capability documented in ARCHITECTURE.md would not actually exist in the
+# deployed artifact.
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/alembic ./alembic
 
 # The committed snapshot the demo serves. Copied rather than mounted so the
 # image runs standalone — a container that needs a volume to answer a request is

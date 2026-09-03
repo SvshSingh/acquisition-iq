@@ -57,7 +57,6 @@ class Settings(BaseSettings):
     # convention every major crawler follows, and overpass-api.de returns 406 to
     # any User-Agent containing an email address (verified 2026-09-02).
     project_url: str = "https://github.com/SvshSingh/acquisition-iq"
-    contact_email: str = "hello@example.com"  # stated in the README, not the UA
 
     overpass_url: str = "https://overpass-api.de/api/interpreter"
     # Community-run mirrors, tried in order when the primary is unavailable.

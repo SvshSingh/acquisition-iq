@@ -16,8 +16,13 @@ services:
         value: production
       - key: DEBUG
         value: "false"
+      # Only used if the frontend ever calls the API cross-origin. In the
+      # shipped setup it does not — Vercel rewrites /api server-side, so requests
+      # reach here same-origin and never trigger CORS. Set to the real Vercel
+      # deployment so a direct browser call would still work; update it if the
+      # frontend URL changes.
       - key: CORS_ORIGINS
-        value: https://acquisition-iq.vercel.app
+        value: https://frontend-orcin-five-88.vercel.app
       # Unset on the free tier: the cache falls back to Postgres, which is the
       # path this deployment runs on by design.
       - key: REDIS_URL
