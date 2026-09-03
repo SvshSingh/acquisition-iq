@@ -88,6 +88,11 @@ export interface Company {
   sibling_location_count: number | null;
   source: string;
   source_url: string | null;
+  /** How complete this record is, scored separately from acquisition fit.
+   *  A thin record on a great business must not be marked down for our
+   *  ignorance, so the two never mix. */
+  data_quality: number | null;
+  quality_issues: string[];
 }
 
 export type Weights = Record<FactorKey, number>;

@@ -18,14 +18,26 @@ _cache: Cache | None = None
 
 
 def build_cache() -> Cache:
-    """Postgres alone when no Redis URL is set; Redis in front of Postgres when
-    one is. The deployed demo runs the first path deliberately — see the
-    deploy-scope decision in CLAUDE.md."""
-    postgres = PostgresCache(get_sessionmaker())
+    """Redis in front of Postgres in front of nothing.
+
+    Every layer is guarded, including the last one. The original version guarded
+    only Redis and handed back a bare `PostgresCache`, on the assumption that if
+    the app is up its own database is up. That is false for this deployment:
+    the API serves a committed snapshot and Render provisions no database, so a
+    live refresh — the one request that actually touches the cache — raised
+    `ConnectionRefusedError` instead of simply running uncached.
+
+    A cache is an optimisation, and an optimisation that can fail a request is a
+    liability. That principle was already written down here; it just was not
+    applied all the way to the bottom of the stack. Now the final standby is a
+    cache that always misses and never raises, so the worst outcome of having no
+    storage at all is doing the work twice.
+    """
+    durable = FallbackCache(primary=PostgresCache(get_sessionmaker()), standby=NullCache())
     if not settings.redis_url:
         logger.info("No REDIS_URL configured; using the Postgres-backed cache.")
-        return postgres
-    return FallbackCache(primary=RedisCache(settings.redis_url), standby=postgres)
+        return durable
+    return FallbackCache(primary=RedisCache(settings.redis_url), standby=durable)
 
 
 def get_cache() -> Cache:

@@ -46,6 +46,7 @@ from app.pipeline.domains import infer_websites
 from app.pipeline.markets import DEFAULT_MARKET, MARKETS, Market, get_market
 from app.pipeline.normalize import normalise_name
 from app.pipeline.peers import annotate_peer_density
+from app.pipeline.quality import annotate as annotate_quality
 from app.pipeline.scrapers.http import PoliteClient
 from app.pipeline.scrapers.website import crawl_site
 from app.pipeline.sources.cslb import CslbSource
@@ -302,6 +303,17 @@ async def collect(market: Market, limit: int, *, use_cache: bool) -> dict[str, o
     started = time.monotonic()
     validated = await validate_all(selected)
     logger.info("validated %d companies in %.1fs", validated, time.monotonic() - started)
+
+    # Record completeness, scored after every enrichment stage has had its say
+    # so it reflects what we actually ended up knowing.
+    annotate_quality(selected)
+    quality = sorted(c.data_quality or 0 for c in selected)
+    logger.info(
+        "data quality: median %.0f, range %.0f-%.0f",
+        quality[len(quality) // 2],
+        quality[0],
+        quality[-1],
+    )
 
     scored = sorted(
         ((c, score_company(c)) for c in selected), key=lambda pair: pair[1].score, reverse=True

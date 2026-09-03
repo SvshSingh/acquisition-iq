@@ -27,6 +27,11 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.config import settings
+from app.pipeline.domains import find_website
+from app.pipeline.quality import assess
+from app.pipeline.scrapers.http import PoliteClient
+from app.pipeline.scrapers.website import crawl_site
+from app.pipeline.validate import MxResolver, validate_contacts
 from app.schemas import (
     FACTOR_DESCRIPTIONS,
     FACTOR_LABELS,
@@ -213,6 +218,67 @@ def get_company(company_id: str) -> ScoredCompany:
         if company.id == company_id:
             return score_many([company])[0]
     raise HTTPException(status_code=404, detail=f"no company with id {company_id!r}")
+
+
+@router.post("/companies/{company_id:path}/refresh", response_model=ScoredCompany)
+async def refresh_company(company_id: str) -> ScoredCompany:
+    """Re-fetch this company from source, re-validate, and re-score.
+
+    This is the live path, and the reason the backend is a long-running
+    container rather than a serverless function. It crawls the company's own
+    site, re-runs contact validation against DNS, and re-scores — work that
+    outlasts a typical serverless timeout and benefits from a warm connection
+    pool. Documenting that trade-off while having no endpoint that exercises it
+    would have been an architecture decision justified by a feature that did not
+    exist.
+
+    The committed snapshot is deliberately not written back to. A refresh
+    answers "what does this company look like right now", and quietly mutating
+    the shipped dataset would mean two people running the demo saw different
+    data with no way to tell why.
+    """
+    _, companies = load_dataset()
+    company = next((c for c in companies if c.id == company_id), None)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"no company with id {company_id!r}")
+
+    # A copy, so a failed or partial refresh cannot corrupt the served snapshot.
+    working = company.model_copy(deep=True)
+
+    async with PoliteClient() as client:
+        if not working.website:
+            match = await find_website(client, working)
+            if match is not None:
+                working.website = match.url
+                working.website_source = f"inferred:{match.method}"
+                working.website_evidence = match.detail
+
+        if working.website:
+            signals, found = await crawl_site(client, working.website)
+            working.web = signals
+            if found and not working.contacts:
+                working.contacts = found
+            elif found and working.contacts:
+                existing, fresh = working.contacts[0], found[0]
+                merged = {
+                    field: getattr(fresh, field)
+                    for field in ("email", "name", "title", "linkedin_url")
+                    if not getattr(existing, field) and getattr(fresh, field)
+                }
+                if merged:
+                    working.contacts[0] = existing.model_copy(update=merged)
+
+    if working.contacts:
+        resolver = MxResolver()
+        try:
+            working.contacts = await validate_contacts(working.contacts, resolver)
+        finally:
+            await resolver.aclose()
+
+    working.last_refreshed = datetime.now(UTC)
+    working.data_quality, working.quality_issues = assess(working)
+
+    return score_many([working])[0]
 
 
 @router.get("/meta")

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 import dns.asyncresolver
 import dns.exception
 import dns.resolver
+import httpx
 import phonenumbers
 from email_validator import EmailNotValidError, validate_email
 
@@ -71,21 +72,90 @@ class EmailVerdict:
 
 
 class MxResolver:
-    """MX lookups with a per-domain memo.
+    """MX lookups with a per-domain memo and a DNS-over-HTTPS fallback.
 
     Two hundred companies share far fewer mail domains than you would expect —
     every business on Google Workspace resolves to the same handful of hosts — so
     the memo turns most of the work into nothing. The lock matters for the same
     reason it does in the robots fetcher: without it, a burst of addresses on one
     domain fires a burst of identical DNS queries.
+
+    **Why the fallback exists.** Plenty of networks permit outbound HTTPS while
+    silently dropping UDP port 53 — corporate egress filters, some container
+    platforms, CI runners. On one such network every lookup in a full collection
+    run timed out, so all 28 discovered addresses came back `UNKNOWN` and the
+    validation stage did nothing at all while appearing to run. It failed
+    honestly rather than inventing verdicts, which is the right failure, but a
+    feature that silently no-ops on a common network configuration is not much
+    of a feature.
+
+    So a timeout on direct DNS promotes the resolver to DNS-over-HTTPS for the
+    rest of its life. The decision is made once rather than per domain: having
+    established that port 53 is unavailable, paying the timeout again on every
+    subsequent lookup would be the same mistake the HTTP circuit breaker exists
+    to avoid.
     """
+
+    #: RFC 8484 resolvers, tried in order. Both answer the JSON form.
+    DOH_ENDPOINTS = ("https://cloudflare-dns.com/dns-query", "https://dns.google/resolve")
 
     def __init__(self, timeout: float = 5.0) -> None:
         self._resolver = dns.asyncresolver.Resolver()
         self._resolver.timeout = timeout
         self._resolver.lifetime = timeout
+        self._timeout = timeout
         self._memo: dict[str, list[str] | None] = {}
         self._locks: dict[str, asyncio.Lock] = {}
+        self._use_doh = False
+        self._doh: httpx.AsyncClient | None = None
+
+    async def _doh_client(self) -> httpx.AsyncClient:
+        if self._doh is None:
+            self._doh = httpx.AsyncClient(
+                timeout=self._timeout,
+                headers={"Accept": "application/dns-json"},
+            )
+        return self._doh
+
+    async def _resolve_over_https(self, domain: str, record: str) -> list[str] | None:
+        """Query DoH. Returns records, `[]` for a definitive empty answer, or
+        None when no resolver could be reached."""
+        client = await self._doh_client()
+        for endpoint in self.DOH_ENDPOINTS:
+            try:
+                response = await client.get(
+                    endpoint, params={"name": domain, "type": record}
+                )
+                if response.status_code != 200:
+                    continue
+                payload = response.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                logger.debug("DoH %s failed for %s: %s", endpoint, domain, exc)
+                continue
+
+            status = payload.get("Status")
+            # 0 = NOERROR, 3 = NXDOMAIN. Both are real answers; anything else
+            # is a server-side problem and worth trying the next resolver for.
+            if status not in (0, 3):
+                continue
+            answers = [
+                str(a.get("data", "")).strip().rstrip(".")
+                for a in payload.get("Answer", [])
+                # Type 15 is MX, 1 is A. Other types in the answer section are
+                # CNAME hops we do not care about.
+                if a.get("type") == (15 if record == "MX" else 1)
+            ]
+            if record == "MX":
+                # "10 mx.example.com" — strip the preference number.
+                answers = [a.split(" ", 1)[-1].strip() for a in answers if a]
+            return sorted(a for a in answers if a)
+
+        return None
+
+    async def aclose(self) -> None:
+        if self._doh is not None:
+            await self._doh.aclose()
+            self._doh = None
 
     async def mx_hosts(self, domain: str) -> list[str] | None:
         """Mail exchangers for a domain.
@@ -104,31 +174,45 @@ class MxResolver:
                 return self._memo[domain]
 
             hosts: list[str] | None
-            try:
-                answer = await self._resolver.resolve(domain, "MX")
-                hosts = sorted(str(r.exchange).rstrip(".") for r in answer)
-            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
-                # No MX published. That is not automatically fatal: RFC 5321
-                # falls back to the A record, and plenty of small businesses
-                # rely on exactly that. Distinguishing "no MX but the domain is
-                # real" from "no such domain" needs an A lookup, which the
-                # caller does via `domain_exists` only when it reaches this case.
-                hosts = []
-            except (dns.exception.DNSException, OSError) as exc:
-                logger.debug("MX lookup failed for %s: %s", domain, exc)
-                hosts = None
+            if self._use_doh:
+                hosts = await self._resolve_over_https(domain, "MX")
+            else:
+                try:
+                    answer = await self._resolver.resolve(domain, "MX")
+                    hosts = sorted(str(r.exchange).rstrip(".") for r in answer)
+                except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+                    # No MX published. Not automatically fatal: RFC 5321 falls
+                    # back to the A record and plenty of small businesses rely
+                    # on exactly that. Distinguishing "no MX but the domain is
+                    # real" from "no such domain" needs an A lookup, which the
+                    # caller does via `domain_exists` only when it gets here.
+                    hosts = []
+                except (dns.exception.DNSException, OSError) as exc:
+                    # Port 53 is unreachable on this network. Promote once and
+                    # answer this query over HTTPS rather than failing it.
+                    logger.info(
+                        "direct DNS unavailable (%s); switching to DNS-over-HTTPS", exc
+                    )
+                    self._use_doh = True
+                    hosts = await self._resolve_over_https(domain, "MX")
 
             self._memo[domain] = hosts
             return hosts
 
     async def domain_exists(self, domain: str) -> bool | None:
-        try:
-            await self._resolver.resolve(domain.lower().strip("."), "A")
-            return True
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
-            return False
-        except (dns.exception.DNSException, OSError):
-            return None
+        """Whether the domain resolves at all. None means we could not tell."""
+        domain = domain.lower().strip(".")
+        if not self._use_doh:
+            try:
+                await self._resolver.resolve(domain, "A")
+                return True
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+                return False
+            except (dns.exception.DNSException, OSError):
+                self._use_doh = True
+
+        records = await self._resolve_over_https(domain, "A")
+        return None if records is None else bool(records)
 
 
 async def verify_email(email: str, resolver: MxResolver) -> EmailVerdict:

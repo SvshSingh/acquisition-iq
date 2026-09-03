@@ -20,3 +20,6 @@ frontend/node_modules/
 # Local working notes, not part of the deliverable
 CLAUDE.md
 .claude/
+
+.vercel
+.env*

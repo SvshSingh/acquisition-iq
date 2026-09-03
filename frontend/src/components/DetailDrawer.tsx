@@ -24,10 +24,16 @@ export function DetailDrawer({
   item,
   rescored,
   onClose,
+  onRefresh,
+  refreshing,
+  refreshError,
 }: {
   item: ScoredCompany | null;
   rescored: Rescored | null;
   onClose: () => void;
+  onRefresh?: (id: string) => void;
+  refreshing?: boolean;
+  refreshError?: string | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -93,6 +99,37 @@ export function DetailDrawer({
         <div className="mt-3">
           <ContributionBar contributions={rescored.contributions} height={8} />
         </div>
+
+        {onRefresh ? (
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onRefresh(company.id)}
+              disabled={refreshing}
+              className="rounded border border-[var(--color-rule-strong)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface)] disabled:cursor-wait disabled:opacity-60"
+            >
+              {refreshing ? "Re-checking source…" : "Refresh from source"}
+            </button>
+            <span className="text-[11px] text-[var(--color-ink-faint)]">
+              {company.data_quality !== null && company.data_quality !== undefined
+                ? `Record ${Math.round(company.data_quality)}% complete`
+                : null}
+            </span>
+          </div>
+        ) : null}
+
+        {refreshError ? (
+          <p className="mt-2 text-[11.5px] text-[var(--color-ink-soft)]">
+            Refresh failed: {refreshError}
+          </p>
+        ) : null}
+
+        {company.quality_issues?.length ? (
+          <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--color-ink-faint)]">
+            <span className="font-medium">Record gaps:</span>{" "}
+            {company.quality_issues.slice(0, 4).join(", ")}.
+          </p>
+        ) : null}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

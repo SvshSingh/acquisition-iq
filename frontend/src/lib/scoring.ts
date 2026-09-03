@@ -11,9 +11,15 @@
  *  exploring a thesis and start filling in a form.
  *
  *  It mirrors `_effective_weights` in `backend/app/scoring/engine.py` exactly,
- *  including the coverage floor. If the two ever disagree the UI would show a
- *  number the API would not reproduce, so the rule is duplicated deliberately
- *  and the test suite pins both to the same fixtures.
+ *  including the coverage floor. That duplication is deliberate — the
+ *  alternative is a round trip per slider movement — but it is a real risk: if
+ *  the two implementations ever drift, the UI shows a number the API would not
+ *  reproduce, and the whole "you can audit this score" claim collapses.
+ *
+ *  **This is currently guarded only by the backend's golden-file test, not by
+ *  anything on this side.** There are no frontend tests. Any change to the
+ *  redistribution rule has to be made in both files by hand, and the honest
+ *  next step is a shared fixture both suites read.
  */
 
 import type { Confidence, FactorKey, ScoredCompany, Weights } from "./types";

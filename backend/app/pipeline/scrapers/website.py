@@ -78,6 +78,19 @@ _FOUNDED_YEAR = re.compile(
 _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 _PHONE = re.compile(r"(?:\+1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b")
 
+# A company or personal LinkedIn profile linked from the site. Worth capturing
+# because it is a second outreach channel the contactability factor scores, and
+# because it is the one identifier a searcher can use to check who they are
+# actually dealing with before making contact.
+#
+# `/company/` and `/in/` only: share widgets, post permalinks and the bare
+# linkedin.com homepage in a footer nav are not profiles and would put a
+# useless link in front of the user.
+_LINKEDIN = re.compile(
+    r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/(?:company|in)/[A-Za-z0-9\-_%.]{2,80}",
+    re.I,
+)
+
 # Sentences worth keeping verbatim, because the scoring engine pattern-matches
 # them and the UI quotes them back to the user as evidence.
 _OWNERSHIP_SENTENCE = re.compile(
@@ -249,7 +262,11 @@ def _extract_contacts(text: str, html: str) -> list[Contact]:
     ]
     phones = list(dict.fromkeys(m.group(0) for m in _PHONE.finditer(text)))
     person = _extract_decision_maker(text)
-    if not emails and not phones and not person:
+    linkedin = next(
+        (m.group(0).rstrip("/") for m in _LINKEDIN.finditer(html)),
+        None,
+    )
+    if not emails and not phones and not person and not linkedin:
         return []
     return [
         Contact(
@@ -259,6 +276,7 @@ def _extract_contacts(text: str, html: str) -> list[Contact]:
             email_status=VerificationStatus.UNKNOWN,
             phone=phones[0] if phones else None,
             phone_valid=None,
+            linkedin_url=linkedin,
             is_decision_maker=person is not None,
         )
     ]

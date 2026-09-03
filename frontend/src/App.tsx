@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, type SearchParams } from "./lib/api";
 import { rescore } from "./lib/scoring";
-import type { FactorKey, Weights } from "./lib/types";
+import type { FactorKey, ScoredCompany, Weights } from "./lib/types";
 import { FACTOR_ORDER } from "./lib/types";
 import { DetailDrawer } from "./components/DetailDrawer";
 import { ResultsTable, type Row } from "./components/ResultsTable";
@@ -28,6 +28,10 @@ export default function App() {
   // beside the table, so it becomes a sheet the user opens. Hiding it outright
   // would remove the thesis controls entirely, which are half the product.
   const [panelOpen, setPanelOpen] = useState(false);
+  // Refreshed companies overlay the snapshot rather than replacing it. A
+  // refresh answers "what does this look like right now"; the shipped dataset
+  // stays exactly as collected so two people see the same baseline.
+  const [refreshed, setRefreshed] = useState<Record<string, ScoredCompany>>({});
 
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   const search = useQuery({
@@ -36,15 +40,24 @@ export default function App() {
     placeholderData: (prev) => prev,
   });
 
+  const refresh = useMutation({
+    mutationFn: api.refresh,
+    onSuccess: (updated) =>
+      setRefreshed((prev) => ({ ...prev, [updated.company.id]: updated })),
+  });
+
   /* Re-weighting happens here rather than on the server, so moving a slider
      re-sorts in a frame instead of a round trip. The subscores and the decision
      about what was measured are the server's; this is only the arithmetic. */
   const rows: Row[] = useMemo(() => {
     const items = search.data?.results ?? [];
     return items
-      .map((item) => ({ item, rescored: rescore(item, weights) }))
+      .map((item) => {
+        const current = refreshed[item.company.id] ?? item;
+        return { item: current, rescored: rescore(current, weights) };
+      })
       .sort((a, b) => b.rescored.score - a.rescored.score);
-  }, [search.data, weights]);
+  }, [search.data, weights, refreshed]);
 
   const open = rows.find((r) => r.item.company.id === openId) ?? null;
 
@@ -241,6 +254,9 @@ export default function App() {
                 item={open.item}
                 rescored={open.rescored}
                 onClose={() => setOpenId(null)}
+                onRefresh={(id) => refresh.mutate(id)}
+                refreshing={refresh.isPending && refresh.variables === open.item.company.id}
+                refreshError={refresh.isError ? (refresh.error as Error).message : null}
               />
             </aside>
           </>

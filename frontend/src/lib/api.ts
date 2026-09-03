@@ -36,10 +36,36 @@ export interface SearchParams {
   limit?: number;
 }
 
+async function post<T>(path: string): Promise<T> {
+  const response = await fetch(new URL(`${BASE}${path}`, window.location.origin), {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (body.detail) detail = body.detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(detail);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   meta: () => get<Meta>("/meta"),
   search: (params: SearchParams) => get<SearchResponse>("/companies", { ...params }),
   company: (id: string) => get<ScoredCompany>(`/companies/${encodeURIComponent(id)}`),
+
+  /** Re-fetch one company from source, re-validate and re-score.
+   *
+   *  Slow by nature — it crawls the company's own site and hits DNS — which is
+   *  exactly why the backend is a long-running container rather than a
+   *  serverless function. */
+  refresh: (id: string) =>
+    post<ScoredCompany>(`/companies/${encodeURIComponent(id)}/refresh`),
 
   /** Build the export URL rather than fetching it: the browser's own download
    *  handling gives a real filename and a progress indicator, which a blob
