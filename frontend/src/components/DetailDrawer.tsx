@@ -1,4 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+
+/** Tailwind's `xl` breakpoint, where the panel stops covering the page and
+ *  becomes a column beside the table. Read from a media query rather than a
+ *  resize listener so it costs nothing between breakpoint crossings. */
+const OVERLAY_QUERY = "(max-width: 1279.98px)";
+
+function subscribeToOverlayBreakpoint(onChange: () => void): () => void {
+  const mql = window.matchMedia(OVERLAY_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+function isBelowXl(): boolean {
+  return window.matchMedia(OVERLAY_QUERY).matches;
+}
 import { displayName } from "../lib/format";
 import type { Rescored } from "../lib/scoring";
 import type { FactorResult, ScoredCompany } from "../lib/types";
@@ -36,16 +51,61 @@ export function DetailDrawer({
   refreshError?: string | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // Below `xl` the panel covers the page and is a modal in every sense that
+  // matters to a keyboard or screen-reader user, so it has to behave like one.
+  // Above `xl` it sits beside the table and is just another region — trapping
+  // focus there would be wrong, since the table is still visible and usable.
+  const isOverlay = useSyncExternalStore(subscribeToOverlayBreakpoint, isBelowXl, () => false);
 
   useEffect(() => {
     if (!item) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+    const panel = panelRef.current;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    function focusable(): HTMLElement[] {
+      if (!panel) return [];
+      return [
+        ...panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => el.offsetParent !== null);
     }
+
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      // Only cycle focus while the panel is actually covering the page.
+      if (event.key !== "Tab" || !isOverlay || !panel) return;
+      const items = focusable();
+      if (items.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === panel)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
     document.addEventListener("keydown", onKey);
-    panelRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [item, onClose]);
+    panel?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // Send focus back where it came from, so closing the panel with the
+      // keyboard returns the user to the row they opened rather than the top
+      // of the document.
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [item, onClose, isOverlay]);
 
   if (!item || !rescored) return null;
 
@@ -60,7 +120,10 @@ export function DetailDrawer({
       ref={panelRef}
       tabIndex={-1}
       role="dialog"
-      aria-modal="false"
+      // True only when the panel actually covers the page and traps focus.
+      // Hardcoding it either way lies to a screen reader in one of the two
+      // layouts, and "modal" is a promise about focus, not about styling.
+      aria-modal={isOverlay}
       aria-label={`Score breakdown for ${displayName(company.name)}`}
       className="flex h-full min-h-0 w-full flex-col border-l border-[var(--color-rule)] bg-[var(--color-paper)]"
     >

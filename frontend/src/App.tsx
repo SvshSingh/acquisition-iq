@@ -5,7 +5,12 @@ import { rescore } from "./lib/scoring";
 import type { FactorKey, ScoredCompany, Weights } from "./lib/types";
 import { FACTOR_ORDER } from "./lib/types";
 import { DetailDrawer } from "./components/DetailDrawer";
-import { ResultsTable, type Row } from "./components/ResultsTable";
+import {
+  ResultsTable,
+  type Row,
+  type SortKey,
+  type SortState,
+} from "./components/ResultsTable";
 import { WeightsPanel } from "./components/WeightsPanel";
 import { EmptyState } from "./components/primitives";
 
@@ -36,6 +41,7 @@ export default function App() {
   // table and drawer, just fed from the user's own leads instead of the seed.
   const [imported, setImported] = useState<UploadResult | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [sort, setSort] = useState<SortState>({ key: "score", dir: "desc" });
 
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   const search = useQuery({
@@ -64,13 +70,38 @@ export default function App() {
      about what was measured are the server's; this is only the arithmetic. */
   const rows: Row[] = useMemo(() => {
     const items = imported ? imported.results : (search.data?.results ?? []);
-    return items
-      .map((item) => {
-        const current = refreshed[item.company.id] ?? item;
-        return { item: current, rescored: rescore(current, weights) };
-      })
-      .sort((a, b) => b.rescored.score - a.rescored.score);
-  }, [imported, search.data, weights, refreshed]);
+    const scored = items.map((item) => {
+      const current = refreshed[item.company.id] ?? item;
+      return { item: current, rescored: rescore(current, weights) };
+    });
+
+    const direction = sort.dir === "asc" ? 1 : -1;
+    return scored.sort((a, b) => {
+      if (sort.key === "name") {
+        // localeCompare so accented names sort where a reader expects, and
+        // numeric so "Shop 2" precedes "Shop 10".
+        return (
+          direction *
+          a.item.company.name.localeCompare(b.item.company.name, undefined, { numeric: true })
+        );
+      }
+      const left = sort.key === "coverage" ? a.rescored.coveredWeight : a.rescored.score;
+      const right = sort.key === "coverage" ? b.rescored.coveredWeight : b.rescored.score;
+      // Ties fall back to score, so re-sorting by a coarse column does not
+      // scramble rows that share a value.
+      return direction * (left - right) || b.rescored.score - a.rescored.score;
+    });
+  }, [imported, search.data, weights, refreshed, sort]);
+
+  const onSort = useCallback((key: SortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : // A new column starts in the direction that is useful first: highest
+          // score, but names A–Z.
+          { key, dir: key === "name" ? "asc" : "desc" },
+    );
+  }, []);
 
   function onPickFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -85,6 +116,12 @@ export default function App() {
   }, []);
 
   const isDirty = FACTOR_ORDER.some((k) => weights[k] !== DEFAULT_WEIGHTS[k]);
+
+  // `limit` is plumbing, not a user choice, so it must not count as an active
+  // filter — otherwise the panel always claims one is set.
+  const activeFilterCount = (Object.keys(filters) as (keyof SearchParams)[]).filter(
+    (k) => k !== "limit" && filters[k] !== undefined && filters[k] !== "",
+  ).length;
 
   const toggle = useCallback((id: string) => {
     setChecked((prev) => {
@@ -185,9 +222,25 @@ export default function App() {
           } shrink-0 overflow-y-auto border-r border-[var(--color-rule)] bg-[var(--color-paper)] lg:static lg:z-auto lg:block lg:w-64 lg:shadow-none`}
         >
           <section className="border-b border-[var(--color-rule)] p-5">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-soft)]">
-              Filter
-            </h2>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-soft)]">
+                Filter
+                {activeFilterCount ? (
+                  <span className="ml-1.5 font-normal text-[var(--color-ink-faint)]">
+                    ({activeFilterCount})
+                  </span>
+                ) : null}
+              </h2>
+              {activeFilterCount ? (
+                <button
+                  type="button"
+                  onClick={() => setFilters({ limit: 500 })}
+                  className="text-[11px] text-[var(--color-ink-faint)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-ink)]"
+                >
+                  Clear all
+                </button>
+              ) : null}
+            </div>
             <div className="mt-3 space-y-3">
               <input
                 type="search"
@@ -301,6 +354,8 @@ export default function App() {
               onOpen={setOpenId}
               onToggle={toggle}
               onToggleAll={toggleAll}
+              sort={sort}
+              onSort={onSort}
             />
           )}
         </main>

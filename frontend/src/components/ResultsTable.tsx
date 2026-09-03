@@ -15,6 +15,12 @@ export interface Row {
   rescored: Rescored;
 }
 
+export type SortKey = "score" | "name" | "coverage";
+export interface SortState {
+  key: SortKey;
+  dir: "asc" | "desc";
+}
+
 /** The ranked list.
  *
  *  Rows are focusable and navigable with the arrow keys, because this is a list
@@ -29,6 +35,8 @@ export function ResultsTable({
   onOpen,
   onToggle,
   onToggleAll,
+  sort,
+  onSort,
 }: {
   rows: Row[];
   loading: boolean;
@@ -37,6 +45,8 @@ export function ResultsTable({
   onOpen: (id: string) => void;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -69,9 +79,30 @@ export function ResultsTable({
 
   const allChecked = rows.length > 0 && rows.every((r) => checked.has(r.item.company.id));
 
+  function header(key: SortKey, label: string, align: "left" | "right" = "left") {
+    const active = sort.key === key;
+    return (
+      <button
+        type="button"
+        onClick={() => onSort(key)}
+        // aria-sort belongs on the header a screen reader announces, and it has
+        // to say "none" rather than be omitted when another column is active.
+        aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+        className={`flex items-center gap-1 uppercase tracking-[0.1em] hover:text-[var(--color-ink)] ${
+          align === "right" ? "justify-end" : ""
+        } ${active ? "text-[var(--color-ink)]" : ""}`}
+      >
+        {label}
+        <span aria-hidden className={active ? "opacity-100" : "opacity-0"}>
+          {sort.dir === "asc" ? "↑" : "↓"}
+        </span>
+      </button>
+    );
+  }
+
   return (
-    <div className="flex min-h-0 flex-col">
-      <div className="grid grid-cols-[2rem_1fr_5.5rem_9rem_7rem] items-center gap-3 border-b border-[var(--color-rule)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-ink-faint)]">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="grid grid-cols-[2rem_1fr_5.5rem_9rem_7rem] items-center gap-3 border-b border-[var(--color-rule)] px-4 py-2 text-[11px] font-semibold text-[var(--color-ink-faint)]">
         <input
           type="checkbox"
           aria-label="Select all rows"
@@ -79,10 +110,10 @@ export function ResultsTable({
           onChange={onToggleAll}
           className="size-3.5 accent-[var(--color-accent)]"
         />
-        <span>Company</span>
-        <span className="text-right">Fit</span>
-        <span>Contribution</span>
-        <span>Confidence</span>
+        {header("name", "Company")}
+        {header("score", "Fit", "right")}
+        <span className="uppercase tracking-[0.1em]">Contribution</span>
+        {header("coverage", "Confidence")}
       </div>
 
       <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto">

@@ -101,6 +101,60 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Scrollbars.
+
+   This layout has two independent scroll regions side by side — the results
+   list and the breakdown panel — so the platform default put two chunky bars
+   next to each other, one of them landing in the middle of the screen between
+   the table and the drawer. It read as a seam through the page and made it
+   ambiguous which region the wheel would move.
+
+   The scrolling itself is not the problem and is kept. What goes is the
+   permanent chrome: a hairline thumb, no track, and no arrows, appearing only
+   once the pointer is over a region that can actually scroll. On macOS and
+   mobile these are overlay scrollbars already and nothing changes; this makes
+   Windows and Linux behave the same way. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+*:hover,
+*:focus-within {
+  scrollbar-color: color-mix(in oklch, var(--color-rule-strong) 70%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+  /* Inset via a transparent border so the thumb reads as a 4px hairline
+     floating in the gutter rather than filling it. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*:hover::-webkit-scrollbar-thumb,
+*:focus-within::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--color-rule-strong) 70%, transparent);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-rule-strong);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Focus is visible and consistent. The table is keyboard-navigable and a
    focus ring that only appears on some controls is worse than none. */
 :where(a, button, input, select, [tabindex]):focus-visible {
