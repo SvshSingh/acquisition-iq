@@ -14,6 +14,7 @@ not the judgement.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
@@ -319,11 +320,22 @@ async def score_upload(file: UploadFile = File(...)) -> dict[str, Any]:  # noqa:
             ),
         )
 
+    # Concurrent across rows, not one at a time. Most rows carry a single
+    # contact, so validating per row serialises the stage into consecutive DNS
+    # round trips — at the 2,000-row cap that is minutes of latency and a near
+    # certain gateway timeout. The per-domain memo inside MxResolver means the
+    # fan-out costs the resolvers little: queries collapse onto the handful of
+    # distinct mail domains a real list actually contains.
     resolver = MxResolver()
+    with_contacts = [c for c in result.companies if c.contacts]
+    semaphore = asyncio.Semaphore(24)
+
+    async def validate_one(company: Company) -> None:
+        async with semaphore:
+            company.contacts = await validate_contacts(company.contacts, resolver)
+
     try:
-        for company in result.companies:
-            if company.contacts:
-                company.contacts = await validate_contacts(company.contacts, resolver)
+        await asyncio.gather(*(validate_one(c) for c in with_contacts))
     finally:
         await resolver.aclose()
 
