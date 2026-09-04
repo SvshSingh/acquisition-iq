@@ -1,0 +1,53 @@
+# Keep the free-tier backend from sleeping.
+#
+# The API runs as a long-running container on Render's free plan, which spins
+# the service down after ~15 minutes of inactivity. The next visitor then pays
+# a 30-60s cold start while it wakes — long enough that the page can look broken
+# on a first load. That is expected behaviour of the plan, not a fault in the
+# app, but it is a poor first impression for someone opening the link cold.
+#
+# This pings the health endpoint on a schedule so the container stays awake.
+#
+# Honest caveat: GitHub's scheduled runs are best-effort. Under load they are
+# routinely delayed, and occasionally skipped, so a */10 cron can in practice
+# fire every 10-25 minutes — close to the 15-minute sleep window. It cuts cold
+# starts sharply but does not eliminate them. For a hard guarantee (e.g. during
+# a review window) an external uptime pinger — UptimeRobot, cron-job.org — hits
+# the same URL on a schedule it actually keeps. See the README.
+name: keep-warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # run manually before you share the link
+
+# Never let two pings overlap, and never let a slow cold start pile up runs.
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the backend
+        env:
+          # The Render service behind the Vercel /api rewrite.
+          HEALTH_URL: https://acquisition-iq-api.onrender.com/api/health
+        run: |
+          # A cold container can take up to ~60s to answer the first request,
+          # so allow for it and retry rather than failing on the wake-up lag.
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' \
+              --max-time 90 --retry 0 "$HEALTH_URL" || echo 000)
+            echo "attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              cat /tmp/body; echo
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "health check did not return 200 after 3 attempts" >&2
+          cat /tmp/body 2>/dev/null || true
+          exit 1

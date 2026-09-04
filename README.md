@@ -155,6 +155,13 @@ Redis, and no API keys.
 cd backend && ./.venv/Scripts/python.exe -m pytest -q && ./.venv/Scripts/python.exe -m ruff check . && ./.venv/Scripts/python.exe -m mypy app scripts
 ```
 
+And the frontend, which now has its own suite — the scoring rule is implemented
+in both languages, and a generated fixture holds the two in agreement:
+
+```bash
+cd frontend && npm ci && npm test && npx tsc -b && npm run lint
+```
+
 **Rebuild the dataset from source**
 
 ```bash
@@ -169,7 +176,8 @@ cd backend && ./.venv/Scripts/python.exe scripts/collect_seed.py --market glenda
 backend/app/scoring/     the six factors and weighted composition — pure, no I/O
 backend/app/pipeline/    sources, dedupe, validation, domain inference, peers
 backend/app/api/         FastAPI routes
-backend/tests/           184 tests
+backend/tests/           236 tests
+frontend/src/*.test.*    41 tests (scoring parity, casing, keyboard nav, layout)
 frontend/src/            React 18 + TypeScript + Tailwind
 data/raw/                CSLB exports, public domain
 data/seed_glendale.json  the committed scored snapshot

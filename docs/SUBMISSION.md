@@ -178,4 +178,11 @@ I confirm I accept the following:
 |---|---|
 | GitHub repository | `https://github.com/SvshSingh/acquisition-iq` |
 | Video walkthrough | *[add link once recorded]* |
-| Live demo | *[add link once deployed]* |
+| Live demo | `https://frontend-orcin-five-88.vercel.app` |
+
+The backend runs on Render's free tier, which sleeps after ~15 minutes idle. The
+**first** request after a quiet spell takes 30-60s while the container wakes, so
+if the page is slow or empty on opening, give it a moment and reload — it is a
+cold start, not a fault. A scheduled ping (`.github/workflows/keep-warm.yml`)
+keeps it warm most of the time; before sharing the link, opening it once wakes
+it for the next visitor.
