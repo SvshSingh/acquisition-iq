@@ -33,7 +33,6 @@ const SORT: SortState = { key: "score", dir: "desc" };
 function setup(overrides: Partial<Parameters<typeof ResultsTable>[0]> = {}) {
   const props = {
     rows: rows(["ABC HVAC INC", "CORNER PLUMBING LLC", "O'BRIEN ELECTRIC"]),
-    loading: false,
     selectedId: null,
     checked: new Set<string>(),
     onOpen: vi.fn(),
@@ -131,8 +130,4 @@ describe("ResultsTable", () => {
     ).toBe(false);
   });
 
-  it("shows placeholders instead of an empty frame while loading", () => {
-    setup({ loading: true, rows: [] });
-    expect(document.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
-  });
 });

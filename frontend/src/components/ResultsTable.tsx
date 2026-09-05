@@ -7,7 +7,6 @@ import {
   ContributionBar,
   CoverageMeter,
   ScoreNumber,
-  Skeleton,
 } from "./primitives";
 
 export interface Row {
@@ -29,7 +28,6 @@ export interface SortState {
  *  selection for export. */
 export function ResultsTable({
   rows,
-  loading,
   selectedId,
   checked,
   onOpen,
@@ -39,7 +37,6 @@ export function ResultsTable({
   onSort,
 }: {
   rows: Row[];
-  loading: boolean;
   selectedId: string | null;
   checked: Set<string>;
   onOpen: (id: string) => void;
@@ -117,79 +114,66 @@ export function ResultsTable({
       </div>
 
       <div ref={bodyRef} className="relative min-h-0 flex-1 overflow-y-auto">
-        {loading
-          ? Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[2rem_1fr_5.5rem_9rem_7rem] items-center gap-3 border-b border-[var(--color-rule)] px-4 py-3"
-              >
-                <Skeleton className="size-3.5" />
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-5 w-12 justify-self-end" />
-                <Skeleton className="h-1.5 w-full" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-            ))
-          : rows.map((row, index) => {
-              const { company } = row.item;
-              const active = company.id === selectedId;
-              return (
-                <div
-                  key={company.id}
-                  data-row-id={company.id}
-                  tabIndex={0}
-                  role="button"
-                  aria-pressed={active}
-                  onClick={() => onOpen(company.id)}
-                  onKeyDown={(e) => onKeyDown(e, index, company.id)}
-                  className={`grid cursor-pointer grid-cols-[2rem_1fr_5.5rem_9rem_7rem] items-center gap-3 border-b border-[var(--color-rule)] px-4 py-3 text-left transition-colors ${
-                    active
-                      ? "bg-[var(--color-accent-soft)]"
-                      : "hover:bg-[var(--color-surface)]"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${company.name}`}
-                    checked={checked.has(company.id)}
-                    onChange={() => onToggle(company.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="size-3.5 accent-[var(--color-accent)]"
-                  />
+        {rows.map((row, index) => {
+          const { company } = row.item;
+          const active = company.id === selectedId;
+          return (
+            <div
+              key={company.id}
+              data-row-id={company.id}
+              tabIndex={0}
+              role="button"
+              aria-pressed={active}
+              onClick={() => onOpen(company.id)}
+              onKeyDown={(e) => onKeyDown(e, index, company.id)}
+              className={`grid cursor-pointer grid-cols-[2rem_1fr_5.5rem_9rem_7rem] items-center gap-3 border-b border-[var(--color-rule)] px-4 py-3 text-left transition-colors ${
+                active
+                  ? "bg-[var(--color-accent-soft)]"
+                  : "hover:bg-[var(--color-surface)]"
+              }`}
+            >
+              <input
+                type="checkbox"
+                aria-label={`Select ${company.name}`}
+                checked={checked.has(company.id)}
+                onChange={() => onToggle(company.id)}
+                onClick={(e) => e.stopPropagation()}
+                className="size-3.5 accent-[var(--color-accent)]"
+              />
 
-                  <div className="min-w-0">
-                    <div className="truncate text-[13.5px] font-medium text-[var(--color-ink)]">
-                      {displayName(company.name)}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 truncate text-[11.5px] text-[var(--color-ink-faint)]">
-                      <span>{company.industry}</span>
-                      <span aria-hidden>·</span>
-                      <span>{company.city}</span>
-                      {company.business_type ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>{company.business_type}</span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <ScoreNumber value={row.rescored.score} size="sm" />
-                  </div>
-
-                  <ContributionBar
-                    contributions={row.rescored.contributions}
-                    title="How each factor contributed to this score"
-                  />
-
-                  <div className="flex flex-col items-start gap-1">
-                    <ConfidenceBadge value={row.rescored.confidence} />
-                    <CoverageMeter value={row.rescored.coveredWeight} />
-                  </div>
+              <div className="min-w-0">
+                <div className="truncate text-[13.5px] font-medium text-[var(--color-ink)]">
+                  {displayName(company.name)}
                 </div>
-              );
-            })}
+                <div className="mt-0.5 flex items-center gap-2 truncate text-[11.5px] text-[var(--color-ink-faint)]">
+                  <span>{company.industry}</span>
+                  <span aria-hidden>·</span>
+                  <span>{company.city}</span>
+                  {company.business_type ? (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span>{company.business_type}</span>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <ScoreNumber value={row.rescored.score} size="sm" />
+              </div>
+
+              <ContributionBar
+                contributions={row.rescored.contributions}
+                title="How each factor contributed to this score"
+              />
+
+              <div className="flex flex-col items-start gap-1">
+                <ConfidenceBadge value={row.rescored.confidence} />
+                <CoverageMeter value={row.rescored.coveredWeight} />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import {
 } from "./components/ResultsTable";
 import { WeightsPanel } from "./components/WeightsPanel";
 import { EmptyState } from "./components/primitives";
+import { LoadingProgress } from "./components/LoadingProgress";
 
 const DEFAULT_WEIGHTS: Weights = {
   succession: 0.28,
@@ -317,7 +318,7 @@ export default function App() {
           />
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {imported ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-rule)] bg-[var(--color-accent-soft)] px-4 py-2 text-[12px]">
               <span className="font-medium text-[var(--color-ink)]">
@@ -363,7 +364,6 @@ export default function App() {
           ) : (
             <ResultsTable
               rows={rows}
-              loading={search.isLoading && !imported}
               selectedId={openId}
               checked={checked}
               onOpen={setOpenId}
@@ -373,6 +373,10 @@ export default function App() {
               onSort={onSort}
             />
           )}
+
+          {/* Mounted across the whole transition, not gated on isLoading, so it
+              can fill to 100 and fade rather than vanishing when data lands. */}
+          <LoadingProgress active={search.isLoading && !imported} />
         </main>
 
         {/* The breakdown is the product, so it must open at every width. It sits

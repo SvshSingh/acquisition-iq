@@ -177,7 +177,7 @@ backend/app/scoring/     the six factors and weighted composition — pure, no I
 backend/app/pipeline/    sources, dedupe, validation, domain inference, peers
 backend/app/api/         FastAPI routes
 backend/tests/           236 tests
-frontend/src/*.test.*    41 tests (scoring parity, casing, keyboard nav, layout)
+frontend/src/*.test.*    57 tests (scoring parity, casing, keyboard nav, layout, loader)
 frontend/src/            React 18 + TypeScript + Tailwind
 data/raw/                CSLB exports, public domain
 data/seed_glendale.json  the committed scored snapshot
