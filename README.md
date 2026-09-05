@@ -7,6 +7,14 @@ for every point.
 Built for the Caprae Capital Full Stack Developer handbook challenge.
 Sourav Singh · [github.com/SvshSingh](https://github.com/SvshSingh)
 
+**Live:** [app](https://frontend-orcin-five-88.vercel.app) ·
+[interactive API docs](https://acquisition-iq-api.onrender.com/docs)
+
+> The backend runs on a free tier that sleeps when idle, so the **first** load
+> after a quiet spell takes ~30s while the container wakes — a progress bar
+> covers the wait. If the page is slow or empty on opening, give it a moment and
+> reload; it is a cold start, not a fault.
+
 ---
 
 ## The insight it's built on

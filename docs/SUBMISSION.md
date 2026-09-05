@@ -179,6 +179,7 @@ I confirm I accept the following:
 | GitHub repository | `https://github.com/SvshSingh/acquisition-iq` |
 | Video walkthrough | *[add link once recorded]* |
 | Live demo | `https://frontend-orcin-five-88.vercel.app` |
+| API demonstration | `https://acquisition-iq-api.onrender.com/docs` (interactive Swagger UI — every endpoint callable in the browser) |
 
 The backend runs on Render's free tier, which sleeps after ~15 minutes idle. The
 **first** request after a quiet spell takes 30-60s while the container wakes, so
