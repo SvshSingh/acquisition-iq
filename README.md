@@ -7,11 +7,12 @@ for every point.
 Built for the Caprae Capital Full Stack Developer handbook challenge.
 Sourav Singh · [github.com/SvshSingh](https://github.com/SvshSingh)
 
-**Live:** [app](https://frontend-orcin-five-88.vercel.app) ·
-[interactive API docs](https://acquisition-iq-api.onrender.com/docs)
+**Live:** [App](https://frontend-orcin-five-88.vercel.app) 
+
+[Interactive API docs](https://acquisition-iq-api.onrender.com/docs)
 
 > The backend runs on a free tier that sleeps when idle, so the **first** load
-> after a quiet spell takes ~30s while the container wakes — a progress bar
+> after a quiet spell takes ~30s while the container wakes a progress bar
 > covers the wait. If the page is slow or empty on opening, give it a moment and
 > reload; it is a cold start, not a fault.
 
@@ -20,8 +21,8 @@ Sourav Singh · [github.com/SvshSingh](https://github.com/SvshSingh)
 ## The insight it's built on
 
 Caprae is not a generic B2B SaaS company; it is an ETA / search-fund firm. Their
-own LinkedIn says it outright — *"Caprae Capital Partners has SaaSquatch Leads
-looking for the niches for us"* — and the founder's writing is about search-fund
+own LinkedIn says it outright *"Caprae Capital Partners has SaaSquatch Leads
+looking for the niches for us"* and the founder's writing is about search-fund
 governance, not sales pipeline.
 
 SaaSquatch today does discovery → enrichment → outreach for generic B2B sales,
@@ -85,7 +86,7 @@ refactor cannot silently move the numbers.
 The same principle runs through the data layer:
 
 - **`VERIFIED` on an email means the domain accepts mail and the address is
-  well-formed — never that the mailbox exists.** Confirming that means opening
+  well-formed never that the mailbox exists.** Confirming that means opening
   SMTP conversations under false pretences thousands of times, which is
   unreliable, rude, and how a sending IP gets blocklisted. The evidence string
   says exactly what was checked.
@@ -122,7 +123,7 @@ project and links here.
 One carve-out is documented rather than hidden: `overpass-api.de` publishes
 `Disallow: /api/`, a rule aimed at search engines spidering expensive API URLs.
 Programmatic use is governed by that project's separate usage policy, which this
-follows. The exemption is an explicit per-prefix allowlist in `config.py` —
+follows. The exemption is an explicit per-prefix allowlist in `config.py` 
 **the website crawler is exempt from nothing.**
 
 ---
@@ -194,21 +195,7 @@ ARCHITECTURE.md          storage, caching, hosting, deployment — the specifics
 
 ---
 
-## Scope, honestly
 
-The handbook asks for no more than five hours of build. The **core engineering**
-was scoped to roughly that; the remaining time went to the dataset, the
-documentation and the presentation. This README will not claim otherwise.
-
-Two production services are specified in `ARCHITECTURE.md` but not provisioned:
-Supabase and Upstash. Neither adds anything a 250-row committed snapshot can
-demonstrate. Both sit behind interfaces the code already uses — the Postgres
-cache fallback is the path the demo actually runs on, not a stub.
-
-The market is a parameter (`--market`), and `columbus` is defined and runnable.
-It is not shipped as a second dataset, because Ohio has no equivalent licence
-register and the two would not compare like with like. Saying so is better than
-shipping a second dataset that looks like generalisation and proves none.
 
 **The known ceiling:** `digital_gap` and `health` need a website, and no register
 publishes one. Domain inference recovers part of that; the rest is reported
