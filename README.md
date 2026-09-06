@@ -42,7 +42,7 @@ not find.
 ## What it does
 
 **Scores acquisition fit, not sales fit.** Succession pressure, buy-box size,
-digital modernisation upside (inverted — a *worse* website scores higher, because
+digital modernisation upside (inverted a *worse* website scores higher, because
 that is post-acquisition headroom), niche fragmentation, contactability, and
 liveness.
 
@@ -61,7 +61,7 @@ them, in the browser, with no round trip.
 
 **Scores the list you already have.** Import a CSV from SaaSquatch, a CRM or a
 broker sheet and it is validated and acquisition-scored in place, with the same
-explainable breakdown — no new tool to adopt, no leaving the workflow that
+explainable breakdown no new tool to adopt, no leaving the workflow that
 produced the list. The columns are auto-mapped and the response says exactly
 which column became which field. This is where the reframe lands: AcquisitionIQ
 is a *layer* on top of a lead source, not a replacement for one. It also closes
@@ -155,7 +155,7 @@ cd frontend && npm install && npm run dev
 ```
 
 Open <http://localhost:5173>. The API is proxied, so nothing else needs
-configuring — the demo reads the committed snapshot and needs no database, no
+configuring the demo reads the committed snapshot and needs no database, no
 Redis, and no API keys.
 
 **Verify the build**
