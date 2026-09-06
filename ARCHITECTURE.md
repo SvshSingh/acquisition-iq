@@ -54,7 +54,7 @@ impossible.
   That rule exists to stop search engines spidering expensive API URLs;
   programmatic use is governed by the project's separate usage policy, which we
   follow. Access is via an explicit per-prefix allowlist in `config.py`, not a
-  global switch — **the website crawler is exempt from nothing**.
+  global switch  **the website crawler is exempt from nothing**.
 
 ---
 
@@ -73,7 +73,7 @@ SQLAlchemy 2.0 with `Mapped[...]` annotations; Alembic for migrations.
 
 **Production:** Supabase (managed Postgres, free tier).
 **Shipped demo:** Postgres in Docker. The demo reads a committed 250-company
-snapshot, so the database is not on the request path — see *Scope* below.
+snapshot, so the database is not on the request path see *Scope* below.
 
 ---
 
@@ -87,7 +87,7 @@ snapshot, so the database is not on the request path — see *Scope* below.
 One `Cache` protocol, four implementations: Redis, Postgres, null (for tests),
 and a fallback wrapper. **Every layer is guarded, including the last one.** A
 cache is an optimisation, and an optimisation that can fail a request is a
-liability — the first failure logs once and demotes to the next standby for the
+liability the first failure logs once and demotes to the next standby for the
 process lifetime rather than paying a timeout on every subsequent call.
 
 The chain is Redis → Postgres → null. That final link was added after the live
@@ -105,7 +105,7 @@ guard exists.
 
 ## Scoring engine
 
-Pure functions of a `Company`. No I/O, no randomness, **no LLM** — which is a
+Pure functions of a `Company`. No I/O, no randomness, **no LLM** which is a
 product decision, not a limitation. A searcher committing seven figures cannot
 audit a model's opinion, and SaaSquatch already ships an opaque AI score. The
 gap this fills is explainability, so every subscore carries the evidence and the
@@ -115,7 +115,7 @@ Six factors, user-weighted. Two mechanisms are worth naming:
 
 **Measured vs. prior.** A factor that observed nothing contributes nothing, and
 its weight is redistributed across factors that did. `buy_box` had a standard
-deviation of **0.00** across 250 companies before this existed — no source
+deviation of **0.00** across 250 companies before this existed no source
 publishes headcount, so it returned the same prior every time while carrying 24%
 of the weight. `covered_weight` records how much of the thesis had evidence, and
 the UI shows it beside every score.
@@ -125,7 +125,7 @@ contact a business *is* a finding; finding no published headcount says nothing
 about the company. Factors declare which case they are in.
 
 **Confidence is computed against declared weights, never effective ones.**
-Otherwise dropping an unevidenced factor would *raise* confidence — knowing less
+Otherwise dropping an unevidenced factor would *raise* confidence knowing less
 would read as knowing more.
 
 ### Client-side re-weighting
@@ -133,8 +133,8 @@ would read as knowing more.
 Weight changes re-score in the browser. Each company ships with its six factor
 subscores, so moving a slider is arithmetic the client does in a frame; a round
 trip would put ~200ms between a control and its consequence. The server keeps the
-judgement — what each factor scored, what evidence supports it, whether it was
-measured — and hands the client only the sum. The redistribution rule is
+judgement what each factor scored, what evidence supports it, whether it was
+measured and hands the client only the sum. The redistribution rule is
 duplicated in `frontend/src/lib/scoring.ts`, including the coverage floor,
 because a UI showing a number the API would not reproduce is worse than latency.
 
@@ -154,7 +154,7 @@ would re-parse the dataset and rebuild the pool on every invocation, and a
 
 `POST /api/companies/{id}/refresh` is the endpoint that makes that concrete. It
 crawls the company's own site, re-runs domain inference if no URL is known,
-re-validates contacts against DNS, and re-scores — seconds of work per call.
+re-validates contacts against DNS, and re-scores seconds of work per call.
 It exists because justifying an architecture with a feature that does not exist
 is worse than choosing the wrong architecture: the claim was in this document
 before the endpoint was, and that was a defect.
@@ -166,12 +166,12 @@ tell why.
 
 The cost of that choice is the free tier's flip side: Render sleeps an idle
 container after ~15 minutes, so the first request after a quiet spell pays a
-30-60s cold start. That is the plan, not a fault — the same long-running process
+30-60s cold start. That is the plan, not a fault the same long-running process
 that justifies the architecture is the thing being suspended. `keep-warm.yml`
 pings `/api/health` on a schedule to hold it awake; for a guaranteed-warm review
 window an external uptime pinger on the same URL is more reliable than GitHub's
 best-effort cron. And when a cold start does happen, the client covers it with a
-first-load progress bar paced to the wait — it advances on a curve tied to the
+first-load progress bar paced to the wait it advances on a curve tied to the
 real request and only the arriving response takes it to 100, so it never claims
 done before the data is there.
 
@@ -228,7 +228,7 @@ almost nothing, since queries collapse onto the few distinct mail domains in pla
 Two production services are specified above but **not provisioned** for the
 shipped demo: Supabase and Upstash. Neither adds anything a 250-row committed
 snapshot can demonstrate, and the time went to the interface instead. Both sit
-behind interfaces the code already uses — the cache fallback is the code path the
+behind interfaces the code already uses the cache fallback is the code path the
 demo runs on, not a stub.
 
 `--market columbus` is defined and runnable but not collected: Ohio has no
@@ -236,5 +236,5 @@ equivalent licence register, so the two markets would not compare like with like
 
 **Known ceiling.** `digital_gap` and `health` depend on a website, and no
 register publishes one. Domain inference recovers some, and every remaining gap
-is reported rather than hidden — which is why `covered_weight` is on screen next
+is reported rather than hidden which is why `covered_weight` is on screen next
 to every score.
