@@ -70,7 +70,7 @@ class DatasetMeta:
 
     market: dict[str, Any] = field(default_factory=dict)
     generated_at: str | None = None
-    sources: list[dict[str, Any]] = field(default_factory=list)
+    sources: list[Any] = field(default_factory=list)
     count: int = 0
     industries: list[str] = field(default_factory=list)
     cities: list[str] = field(default_factory=list)
@@ -468,17 +468,49 @@ class ResilientStore:
     product would still feel down. With it, one request pays for discovering
     the outage and the rest are served immediately. A successful health ping
     ends the cooldown early, so recovery does not wait for the timer.
+
+    `prepare` is the work that has to succeed once before Postgres may serve at
+    all: checking the schema is there and loading an empty database. Until it
+    has, every read goes to the snapshot. It is retried from the health ping
+    rather than only at startup, so a database that was down when the container
+    booted is picked up when it comes back, without a restart.
     """
 
     def __init__(
-        self, primary: PostgresStore, standby: SnapshotStore, *, cooldown_seconds: float = 20.0
+        self,
+        primary: PostgresStore,
+        standby: SnapshotStore,
+        *,
+        cooldown_seconds: float = 20.0,
+        prepare: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._primary = primary
         self._standby = standby
         self._cooldown = cooldown_seconds
         self._skip_until = 0.0
+        self._prepare = prepare
+        self._ready = prepare is None
         self.name = primary.name
         self.last_error: str | None = None
+
+    @property
+    def ready(self) -> bool:
+        return self._ready
+
+    async def prepare(self) -> bool:
+        """Run the one-time preparation. True once Postgres may serve."""
+        if self._ready:
+            return True
+        assert self._prepare is not None
+        try:
+            await self._prepare()
+        except Exception as exc:
+            self._failed(exc)
+            return False
+        self._ready = True
+        self.last_error = None
+        self._skip_until = 0.0
+        return True
 
     def _failed(self, exc: Exception) -> None:
         self.last_error = f"{type(exc).__name__}: {exc}"[:300]
@@ -494,7 +526,7 @@ class ResilientStore:
         primary: Callable[[], Awaitable[T]],
         standby: Callable[[], Awaitable[T]],
     ) -> T:
-        if self.cooling_down:
+        if not self._ready or self.cooling_down:
             return await standby()
         try:
             result = await primary()
@@ -534,7 +566,7 @@ class ResilientStore:
         )
 
     async def save_refresh(self, scored: ScoredCompany) -> bool:
-        if self.cooling_down:
+        if not self._ready or self.cooling_down:
             return False
         try:
             return await self._primary.save_refresh(scored)
@@ -547,8 +579,12 @@ class ResilientStore:
         """Check the database directly, cooldown or not.
 
         This is the one call that always tries, which is what makes it the
-        recovery path: the first healthy ping reopens the database to traffic.
+        recovery path: the first healthy ping reopens the database to traffic,
+        and finishes the startup preparation if the database was not there to
+        prepare when the process booted.
         """
+        if not self._ready:
+            return await self.prepare()
         try:
             await self._primary.ping()
         except Exception as exc:
@@ -603,24 +639,35 @@ async def init_store() -> CompanyStore:
 
     try:
         where = connection_spec().safe_description
-        primary = PostgresStore(get_sessionmaker())
+        sessionmaker = get_sessionmaker()
+    except Exception as exc:
+        # A URL that cannot even be parsed will not get better on retry.
+        _startup_failure = f"{type(exc).__name__}: {exc}"[:300]
+        logger.error("DATABASE_URL is unusable (%s); serving the snapshot", _startup_failure)
+        _store = snapshot
+        return _store
+
+    primary = PostgresStore(sessionmaker)
+
+    async def prepare() -> None:
         existing = await primary.count()
         if existing == 0:
             payload, companies = load_dataset()
-            async with get_sessionmaker()() as session, session.begin():
+            async with sessionmaker() as session, session.begin():
                 loaded = await load_snapshot(session, payload, companies)
             logger.info("bootstrapped empty database at %s with %d companies", where, loaded)
         else:
             logger.info("serving %d companies from postgres at %s", existing, where)
-        _store = ResilientStore(primary, snapshot)
-    except Exception as exc:
-        _startup_failure = f"{type(exc).__name__}: {exc}"[:300]
+
+    resilient = ResilientStore(primary, snapshot, prepare=prepare)
+    if not await resilient.prepare():
         logger.error(
-            "DATABASE_URL is set but the database is unusable (%s); serving the snapshot. "
-            "If the schema is missing, run `alembic upgrade head`.",
-            _startup_failure,
+            "DATABASE_URL is set but the database is not usable yet (%s); serving the "
+            "snapshot and retrying on each health check. If the schema is missing, run "
+            "`alembic upgrade head`.",
+            resilient.last_error,
         )
-        _store = snapshot
+    _store = resilient
     return _store
 
 

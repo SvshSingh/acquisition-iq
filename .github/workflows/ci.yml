@@ -101,8 +101,8 @@ jobs:
         run: npm run build
 
   compose:
-    # The claim in the README is that a grader can run one command and get the
-    # whole system. That claim is worth nothing unless something checks it.
+    # The claim in the README is that one command brings up the whole system.
+    # That claim is worth nothing unless something checks it.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

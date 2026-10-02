@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # The exemption is per-prefix and covers only endpoints we deliberately add.
     # The website crawler — the part that actually spiders arbitrary third-party
     # sites, where robots.txt genuinely governs — is not exempt from anything.
-    # This is stated openly in the README rather than left for a grader to find.
+    # This is stated openly in the README rather than left for a reader to find.
     robots_exempt_prefixes: str = (
         "https://overpass-api.de/api/,"
         "https://overpass.kumi.systems/api/,"
@@ -81,8 +81,8 @@ class Settings(BaseSettings):
     # No LLM settings here, and that is a product decision rather than an
     # omission. The scoring path is deterministic on purpose: a searcher
     # committing seven figures cannot audit a model's opinion, and the gap this
-    # fills is precisely that SaaSquatch already ships an opaque AI score. See
-    # the README.
+    # fills is precisely that lead tools already ship opaque AI scores. See the
+    # README.
 
     seed_dataset_path: str = "../data/seed_glendale.json"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

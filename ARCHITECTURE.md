@@ -102,7 +102,9 @@ still useful; a 500 is not. This is never silent: `/api/health` reports
 `"storage"` (which store is answering right now) and `"database"`
 (`ok`, `unreachable` with the reason, or `not configured`), and a refresh that
 could not be saved says so in its `X-Persisted` header. The first healthy ping
-restores Postgres without a restart.
+restores Postgres without a restart, and that includes a database that was down
+when the container booted: the one-time preparation (schema check, loading an
+empty database) is retried from the health check rather than only at startup.
 
 **Row level security is on for every table**, including Alembic's own. This is
 not optional on Supabase: the `public` schema is published through an
@@ -155,7 +157,7 @@ and not provisioned; the Postgres cache table is the path that runs.
 
 Pure functions of a `Company`. No I/O, no randomness, **no LLM** which is a
 product decision, not a limitation. A searcher committing seven figures cannot
-audit a model's opinion, and SaaSquatch already ships an opaque AI score. The
+audit a model's opinion, and lead tools already ship opaque AI scores. The
 gap this fills is explainability, so every subscore carries the evidence and the
 source URL behind it, and the whole engine is pinned by a golden-file test.
 
@@ -195,8 +197,7 @@ because a UI showing a number the API would not reproduce is worse than latency.
 | **Frontend** | **Static** bundle on Vercel's CDN | No SSR needed. 246KB JS / 76KB gzipped, 15.6KB CSS |
 | **Backend** | **Long-running container** on Render — deliberately *not* serverless | Refresh-from-source scrape jobs outlast a typical serverless timeout; the connection pool and the parsed dataset are only worth having if the process survives between requests |
 
-The serverless question is the one the handbook asks by name, and the answer is
-that it was rejected on the workload rather than defaulted into. A cold Lambda
+Serverless was rejected on the workload rather than defaulted away from. A cold Lambda
 would re-parse the dataset and rebuild the pool on every invocation, and a
 90-second Overpass query does not fit the model at all.
 
@@ -207,18 +208,20 @@ It exists because justifying an architecture with a feature that does not exist
 is worse than choosing the wrong architecture: the claim was in this document
 before the endpoint was, and that was a defect.
 
-It deliberately does not write back to the committed snapshot. A refresh answers
-"what does this company look like right now"; silently mutating the shipped
-dataset would mean two people running the demo saw different data with no way to
-tell why.
+With Postgres serving, a refresh is written back: the company row is updated,
+the raw crawl output is stored beside it, and the score joins the company's
+history. The committed snapshot is never written to, because silently mutating a
+shipped file would mean two people running the same build saw different data
+with no way to tell why. The `X-Persisted` response header says which happened.
 
 The cost of that choice is the free tier's flip side: Render sleeps an idle
 container after ~15 minutes, so the first request after a quiet spell pays a
 30-60s cold start. That is the plan, not a fault the same long-running process
 that justifies the architecture is the thing being suspended. `keep-warm.yml`
-pings `/api/health` on a schedule to hold it awake; for a guaranteed-warm review
-window an external uptime pinger on the same URL is more reliable than GitHub's
-best-effort cron. And when a cold start does happen, the client covers it with a
+pings `/api/health` on a schedule to hold it awake; where a warm service has to
+be guaranteed, an external uptime pinger on the same URL is more reliable than
+GitHub's best-effort cron. The health check runs a query against the database,
+so the same ping is also what recovers a database that was down at boot. And when a cold start does happen, the client covers it with a
 first-load progress bar paced to the wait it advances on a curve tied to the
 real request and only the arriving response takes it to 100, so it never claims
 done before the data is there.
@@ -247,11 +250,12 @@ The compose smoke test asserts `"storage":"postgres"` on `/api/health`. A green
 health check alone would not show the database was in use, because the snapshot
 fallback is healthy too.
 
-Gates, all currently passing: **290 backend tests** (the API routes, both
-migrations, and the storage layer against a real Postgres; 27 of them skip on a
-checkout with no database and run in CI) and **57 frontend tests** (the
+Gates, all currently passing: **292 backend tests** (the API routes, both
+migrations, and the storage layer against a real Postgres; 28 of them skip on a
+checkout with no database and run in CI) and **64 frontend tests** (the
 cross-language scoring parity fixture, name casing, keyboard navigation, a
-structural layout guard, and the first-load progress curve and its component),
+structural layout guard, the first-load progress curve and its component, and
+the score history panel),
 `ruff` clean, `mypy --strict` clean across 39 modules, `oxlint` clean, `tsc -b`
 clean.
 
@@ -286,7 +290,7 @@ almost nothing, since queries collapse onto the few distinct mail domains in pla
 table, behind the same interface Redis would sit in front of.
 
 **Supabase is the production target, and the code path is complete and tested
-against real Postgres** — but this document cannot know whether the service you
+against real Postgres**, but this document cannot know whether the service you
 are looking at has been pointed at it. `/api/health` can, and does.
 
 **Scoring is not pushed into SQL.** Filters run in the database; the score is

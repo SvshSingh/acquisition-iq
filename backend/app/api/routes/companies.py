@@ -266,7 +266,7 @@ async def refresh_company(company_id: str, response: Response) -> ScoredCompany:
 async def score_upload(file: UploadFile = File(...)) -> dict[str, Any]:  # noqa: B008
     """Score a lead list the user brings in — the layer on top of any lead source.
 
-    A searcher exports from SaaSquatch, a CRM or a broker sheet, drops the CSV
+    A searcher exports from a lead tool, a CRM or a broker sheet, drops the CSV
     here, and gets it validated and acquisition-scored with the same explainable
     breakdown as the seed data. The point is workflow fit: they do not leave
     whatever produced the list, and they do not adopt a new tool to enrich it.

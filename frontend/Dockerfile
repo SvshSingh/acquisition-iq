@@ -1,6 +1,6 @@
 # Static bundle behind nginx. There is no SSR and nothing to run at the edge —
 # in production this is a CDN upload, and the container exists so that
-# `docker compose up` gives a grader the whole system in one command.
+# `docker compose up` brings up the whole system in one command.
 
 FROM node:20-alpine AS build
 WORKDIR /app

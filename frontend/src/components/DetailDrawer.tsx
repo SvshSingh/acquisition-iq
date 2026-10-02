@@ -17,6 +17,7 @@ function isBelowXl(): boolean {
 import { displayName } from "../lib/format";
 import type { Rescored } from "../lib/scoring";
 import type { FactorResult, ScoredCompany } from "../lib/types";
+import { ScoreHistory } from "./ScoreHistory";
 import {
   ConfidenceBadge,
   ContributionBar,
@@ -213,6 +214,8 @@ export function DetailDrawer({
             ))}
           </div>
         </section>
+
+        <ScoreHistory companyId={company.id} refreshedAt={company.last_refreshed ?? null} />
 
         {contact ? (
           <section className="border-t border-[var(--color-rule)] px-6 py-5">

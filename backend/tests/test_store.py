@@ -227,13 +227,26 @@ async def test_startup_with_an_unreachable_database_serves_the_snapshot(dead_dat
     """The failure this design exists to prevent: a database outage taking the
     whole product down with it."""
     store = await init_store()
-    assert store.name == "snapshot"
-    assert await store.count() > 0
+    _, companies = load_dataset()
+    assert await store.count() == len(companies)
+    assert [c.id for c in await store.search(CompanyFilters())] == [c.id for c in companies]
 
     status = await storage_status()
     assert status.storage == "snapshot"
     assert status.database == "unreachable"
     assert status.detail  # says why, for whoever is looking at /api/health
+    await get_engine().dispose()
+
+
+async def test_an_unparseable_url_is_reported_rather_than_raised(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "database_url", "mysql://not-postgres/db")
+    reset_store()
+    store = await init_store()
+    assert store.name == "snapshot"
+    status = await storage_status()
+    assert status.database == "unreachable"
+    assert "Postgres" in (status.detail or "")
+    reset_store()
 
 
 async def test_a_read_that_fails_mid_flight_is_answered_from_the_snapshot(dead_database: None):
@@ -520,6 +533,43 @@ async def test_an_empty_database_is_bootstrapped_at_startup(
     status = await storage_status()
     assert (status.storage, status.database) == ("postgres", "ok")
     reset_store()
+
+
+@needs_postgres
+async def test_a_database_that_was_down_at_boot_is_picked_up_when_it_returns(
+    sessionmaker: async_sessionmaker[AsyncSession],
+):
+    """Startup is one moment; an outage that happens to cover it should not
+    pin the process to the snapshot until someone restarts it. The health ping
+    retries the preparation, so recovery needs nobody."""
+    primary = PostgresStore(sessionmaker)
+    payload, companies = load_dataset()
+    attempts = 0
+
+    async def prepare() -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ConnectionRefusedError("database not up yet")
+        async with sessionmaker() as session, session.begin():
+            await load_snapshot(session, payload, companies)
+
+    store = ResilientStore(primary, SnapshotStore(), cooldown_seconds=0, prepare=prepare)
+
+    # Boot: the database is not there. The snapshot answers, and nothing is
+    # sent to a Postgres that has not been prepared (it is empty, so a read
+    # would "succeed" with zero companies, which is worse than failing).
+    assert await store.prepare() is False
+    assert store.ready is False
+    assert len(await store.search(CompanyFilters())) == len(companies)
+    assert await primary.count() == 0
+
+    # A later health check finds it, finishes the preparation, and from then
+    # on Postgres is serving.
+    assert await store.ping() is True
+    assert store.ready is True
+    assert await primary.count() == len(companies)
+    assert await store.save_refresh(score_many(companies[:1])[0]) is True
 
 
 @needs_postgres

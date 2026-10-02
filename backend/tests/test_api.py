@@ -1,7 +1,7 @@
 """API route tests.
 
 These were missing entirely, which was the largest hole in the suite: search,
-filtering, export and refresh are the surface a user and a grader actually touch,
+filtering, export and refresh are the surface a user actually touches,
 and none of them were exercised. Everything here runs against the committed
 snapshot through FastAPI's TestClient, so it needs no database and no network —
 the refresh test relies on the cache degrading to the null backend, which is one

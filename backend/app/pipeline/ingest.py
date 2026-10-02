@@ -2,7 +2,7 @@
 
 This is the layer that turns AcquisitionIQ from a parallel tool into something
 that sits on top of a lead-gen product. A searcher exports their list — from
-SaaSquatch, a CRM, a broker spreadsheet — drops it in, and gets it scored for
+a lead tool, a CRM, a broker spreadsheet — drops it in, and gets it scored for
 acquisition fit with the same explainable breakdown, without leaving whatever
 workflow produced the list.
 
@@ -13,8 +13,8 @@ so a wrong guess is visible rather than silent. Nothing is invented — a column
 we cannot place is reported as unmapped, and a field no column supplied stays
 empty, which the scoring engine already reports as missing rather than filling in.
 
-The synergy worth noting: a SaaSquatch export carries employee-count and revenue
-estimates, which are exactly the size signals the public licence and map sources
+The synergy worth noting: a lead-tool export usually carries employee-count and
+revenue estimates, which are exactly the size signals the public licence and map sources
 cannot provide. So an imported list makes the buy-box factor measurable where the
 seed dataset can only report it as unknown — the two sources are complementary,
 not redundant.

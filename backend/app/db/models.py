@@ -57,7 +57,7 @@ class Market(Base):
     generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Source descriptors exactly as the collector emitted them: name, URL,
     # licence, attribution. Read whole, never queried into.
-    sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, nullable=False)
+    sources: Mapped[list[Any]] = mapped_column(JSONB, default=list, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -1,4 +1,10 @@
-import type { Meta, ScoredCompany, SearchResponse, Weights } from "./types";
+import type {
+  Meta,
+  ScoreHistoryResponse,
+  ScoredCompany,
+  SearchResponse,
+  Weights,
+} from "./types";
 
 export interface UploadResult {
   results: ScoredCompany[];
@@ -69,6 +75,11 @@ export const api = {
   search: (params: SearchParams) => get<SearchResponse>("/companies", { ...params }),
   company: (id: string) => get<ScoredCompany>(`/companies/${encodeURIComponent(id)}`),
 
+  /** Every score the company has been given, newest first. Empty when the
+   *  server is on the snapshot, which keeps no history. */
+  history: (id: string) =>
+    get<ScoreHistoryResponse>(`/companies/${encodeURIComponent(id)}/history`),
+
   /** Re-fetch one company from source, re-validate and re-score.
    *
    *  Slow by nature — it crawls the company's own site and hits DNS — which is
@@ -77,7 +88,7 @@ export const api = {
   refresh: (id: string) =>
     post<ScoredCompany>(`/companies/${encodeURIComponent(id)}/refresh`),
 
-  /** Score a lead list the user brings in — a CSV from SaaSquatch, a CRM, or a
+  /** Score a lead list the user brings in — a CSV from a lead tool, a CRM, or a
    *  broker sheet. The layer that makes any lead source acquisition-aware. */
   async scoreUpload(file: File): Promise<UploadResult> {
     const form = new FormData();
