@@ -60,20 +60,70 @@ impossible.
 
 ## Storage — PostgreSQL 16
 
-Chosen for two features actually used rather than by default:
+Postgres is the serving path whenever `DATABASE_URL` is set. Every route reads
+through one `CompanyStore` interface (`app/store.py`) with two implementations:
 
-- **`JSONB`** holds the raw source payload beside the normalised columns. Provenance
-  is never discarded, so when a score is challenged the answer is reconstructible
-  from what the source returned rather than from what the parser made of it.
-- **`pg_trgm`** with a GIN index on `companies.name` for fuzzy dedupe. Without it,
-  `similarity()` across the table is a sequential scan per candidate.
+| Store | When | What it does |
+|---|---|---|
+| `PostgresStore` | `DATABASE_URL` set | Filters run in SQL; a refresh is written back with its raw output and its score |
+| `SnapshotStore` | no database, or the database is unreachable | Serves the committed 250-company JSON file; read-only |
 
-Five tables: `companies`, `contacts`, `scores`, `raw_payloads`, `http_cache`.
-SQLAlchemy 2.0 with `Mapped[...]` annotations; Alembic for migrations.
+Postgres was chosen for two features that are used, not listed:
 
-**Production:** Supabase (managed Postgres, free tier).
-**Shipped demo:** Postgres in Docker. The demo reads a committed 250-company
-snapshot, so the database is not on the request path see *Scope* below.
+- **`JSONB`** holds what a source returned beside the normalised columns. Each
+  refresh writes a `raw_payloads` row, so when a score is questioned the answer
+  is reconstructible from what the crawl saw rather than from what the parser
+  made of it, even after the page has changed.
+- **`pg_trgm`** with a GIN index on `companies.name`. The search box matches
+  with an unanchored `ILIKE '%term%'`, which a B-tree cannot serve and a trigram
+  index can. At 250 rows the planner rightly prefers a sequential scan; the
+  index is there for the table this is meant to grow into.
+
+Six tables: `markets`, `companies`, `contacts`, `scores`, `raw_payloads`,
+`http_cache`. SQLAlchemy 2.0 with `Mapped[...]` annotations; Alembic migrations.
+
+**Provisioning is one step.** The container runs `alembic upgrade head` on start,
+and the API loads the committed snapshot into an empty database. Pointing the
+service at a bare Postgres is the whole procedure; `scripts/load_seed.py` exists
+for pushing a newly collected market into a database that already has data.
+
+**The SQL path is held to the in-memory path.** The snapshot store is the
+specification. `tests/test_store.py` runs nineteen filter combinations through
+both stores and requires the same companies back, round-trips every company
+through its row and requires it unchanged, and checks that no score moves. CI
+runs these against a real Postgres service, so they are not skipped where it
+counts.
+
+**A database outage costs persistence, not availability.** A read that fails
+against Postgres is answered from the snapshot, and the database is then left
+alone for a short cooldown so that one request pays for discovering the outage
+rather than every request waiting out a connection attempt. A stale lead list is
+still useful; a 500 is not. This is never silent: `/api/health` reports
+`"storage"` (which store is answering right now) and `"database"`
+(`ok`, `unreachable` with the reason, or `not configured`), and a refresh that
+could not be saved says so in its `X-Persisted` header. The first healthy ping
+restores Postgres without a restart, and that includes a database that was down
+when the container booted: the one-time preparation (schema check, loading an
+empty database) is retried from the health check rather than only at startup.
+
+**Row level security is on for every table**, including Alembic's own. This is
+not optional on Supabase: the `public` schema is published through an
+auto-generated REST API reachable with the project's anon key, and a table there
+without RLS is readable and writable by anyone holding it. With RLS enabled and
+no policies, the API roles get nothing, while the backend connects as the table
+owner and is unaffected. A test fails if any table is left open.
+
+**Connection handling** (`app/db/session.py`) normalises whatever URL a
+dashboard hands out: `postgres://` becomes the async driver, libpq's `sslmode`
+is translated to asyncpg's `ssl`, Supabase hosts always get TLS, and the
+transaction pooler (port 6543, PgBouncer) has prepared-statement caching
+disabled because a statement prepared on one server connection may be replayed
+on another. Render reaches Supabase through the **session pooler**: Supabase's
+direct connection is IPv6-only and Render's network is IPv4.
+
+**Production target:** Supabase. Whether a given deployment is on it is not
+something to take from this document: `GET /api/health` on the running service
+says which store is answering.
 
 ---
 
@@ -93,13 +143,13 @@ process lifetime rather than paying a timeout on every subsequent call.
 The chain is Redis → Postgres → null. That final link was added after the live
 refresh endpoint raised `ConnectionRefusedError` in an environment with no
 database: guarding only Redis assumed that if the app is up its own database is
-up, which is false here, since the API serves a committed snapshot and Render
-provisions no Postgres. The worst outcome of having no storage at all should be
-doing the work twice, not failing the request.
+up. The worst outcome of having no storage at all should be doing the work
+twice, not failing the request. With no `DATABASE_URL` the Postgres link is
+skipped outright rather than attempted and caught, since there is nothing to
+fall back *from*.
 
-**Production:** Upstash Redis in front of Postgres.
-**Shipped demo:** the Postgres path, degrading to uncached, which is why the
-guard exists.
+**Production target:** Upstash Redis in front of Postgres. Redis is specified
+and not provisioned; the Postgres cache table is the path that runs.
 
 ---
 
@@ -107,7 +157,7 @@ guard exists.
 
 Pure functions of a `Company`. No I/O, no randomness, **no LLM** which is a
 product decision, not a limitation. A searcher committing seven figures cannot
-audit a model's opinion, and SaaSquatch already ships an opaque AI score. The
+audit a model's opinion, and lead tools already ship opaque AI scores. The
 gap this fills is explainability, so every subscore carries the evidence and the
 source URL behind it, and the whole engine is pinned by a golden-file test.
 
@@ -147,8 +197,7 @@ because a UI showing a number the API would not reproduce is worse than latency.
 | **Frontend** | **Static** bundle on Vercel's CDN | No SSR needed. 246KB JS / 76KB gzipped, 15.6KB CSS |
 | **Backend** | **Long-running container** on Render — deliberately *not* serverless | Refresh-from-source scrape jobs outlast a typical serverless timeout; the connection pool and the parsed dataset are only worth having if the process survives between requests |
 
-The serverless question is the one the handbook asks by name, and the answer is
-that it was rejected on the workload rather than defaulted into. A cold Lambda
+Serverless was rejected on the workload rather than defaulted away from. A cold Lambda
 would re-parse the dataset and rebuild the pool on every invocation, and a
 90-second Overpass query does not fit the model at all.
 
@@ -159,18 +208,20 @@ It exists because justifying an architecture with a feature that does not exist
 is worse than choosing the wrong architecture: the claim was in this document
 before the endpoint was, and that was a defect.
 
-It deliberately does not write back to the committed snapshot. A refresh answers
-"what does this company look like right now"; silently mutating the shipped
-dataset would mean two people running the demo saw different data with no way to
-tell why.
+With Postgres serving, a refresh is written back: the company row is updated,
+the raw crawl output is stored beside it, and the score joins the company's
+history. The committed snapshot is never written to, because silently mutating a
+shipped file would mean two people running the same build saw different data
+with no way to tell why. The `X-Persisted` response header says which happened.
 
 The cost of that choice is the free tier's flip side: Render sleeps an idle
 container after ~15 minutes, so the first request after a quiet spell pays a
 30-60s cold start. That is the plan, not a fault the same long-running process
 that justifies the architecture is the thing being suspended. `keep-warm.yml`
-pings `/api/health` on a schedule to hold it awake; for a guaranteed-warm review
-window an external uptime pinger on the same URL is more reliable than GitHub's
-best-effort cron. And when a cold start does happen, the client covers it with a
+pings `/api/health` on a schedule to hold it awake; where a warm service has to
+be guaranteed, an external uptime pinger on the same URL is more reliable than
+GitHub's best-effort cron. The health check runs a query against the database,
+so the same ping is also what recovers a database that was down at boot. And when a cold start does happen, the client covers it with a
 first-load progress bar paced to the wait it advances on a curve tied to the
 real request and only the arriving response takes it to 100, so it never claims
 done before the data is there.
@@ -186,17 +237,27 @@ zero files and passed over anything — the typecheck step was green by
 construction until it was switched to the build mode that actually reads the
 sources.)
 
-The schema is managed by Alembic: `alembic upgrade head` creates all five tables
-and the trigram index (the migration installs the `pg_trgm` extension first, or
-the `gin_trgm_ops` index would fail on a fresh database). The initial migration
-is autogenerated from the models and verified through a full downgrade-to-base
-and re-upgrade round trip against a clean Postgres.
+The schema is managed by Alembic: `alembic upgrade head` creates the tables and
+the trigram index (the first migration installs the `pg_trgm` extension, or the
+`gin_trgm_ops` index would fail on a fresh database) and enables row level
+security. Both migrations are verified through a full downgrade-to-base and
+re-upgrade round trip against a clean Postgres, and `alembic check` reports no
+drift between the models and the migrated schema. The container runs the upgrade
+on start when a database is configured; if that fails it starts anyway on the
+snapshot and reports the database as unreachable, rather than crash-looping.
 
-Gates, all currently passing: **236 backend tests** (including the API routes
-and the schema migration) and **57 frontend tests** (the cross-language scoring
-parity fixture, name casing, keyboard navigation, a structural layout guard,
-and the first-load progress curve and its component), `ruff` clean, `mypy --strict` clean across 36 modules, `oxlint` clean,
-`tsc -b` clean.
+The compose smoke test asserts `"storage":"postgres"` on `/api/health`. A green
+health check alone would not show the database was in use, because the snapshot
+fallback is healthy too.
+
+Gates, all currently passing: **292 backend tests** (the API routes, both
+migrations, and the storage layer against a real Postgres; 28 of them skip on a
+checkout with no database and run in CI) and **64 frontend tests** (the
+cross-language scoring parity fixture, name casing, keyboard navigation, a
+structural layout guard, the first-load progress curve and its component, and
+the score history panel),
+`ruff` clean, `mypy --strict` clean across 39 modules, `oxlint` clean, `tsc -b`
+clean.
 
 ---
 
@@ -225,11 +286,19 @@ almost nothing, since queries collapse onto the few distinct mail domains in pla
 
 ## Scope, stated honestly
 
-Two production services are specified above but **not provisioned** for the
-shipped demo: Supabase and Upstash. Neither adds anything a 250-row committed
-snapshot can demonstrate, and the time went to the interface instead. Both sit
-behind interfaces the code already uses the cache fallback is the code path the
-demo runs on, not a stub.
+**Redis is specified and not provisioned.** The HTTP cache runs on its Postgres
+table, behind the same interface Redis would sit in front of.
+
+**Supabase is the production target, and the code path is complete and tested
+against real Postgres**, but this document cannot know whether the service you
+are looking at has been pointed at it. `/api/health` can, and does.
+
+**Scoring is not pushed into SQL.** Filters run in the database; the score is
+computed in Python per request. The engine is deterministic code under a
+golden-file test, and re-expressing it as SQL to filter on `min_score` in the
+database would mean two implementations of the judgement. At hundreds of
+companies this is invisible. At hundreds of thousands it is the first thing to
+change, most likely by serving default-weight scores from the `scores` table.
 
 `--market columbus` is defined and runnable but not collected: Ohio has no
 equivalent licence register, so the two markets would not compare like with like.

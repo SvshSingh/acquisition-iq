@@ -1,9 +1,9 @@
 """A polite async HTTP client.
 
 Every host we touch is someone else's server and we are an uninvited guest. The
-politeness here is not decoration — "ethical data collection" is a scored line in
-the grading rubric, and more practically, a scraper that hammers a small
-business's shared host is the kind that gets a source blocked for everyone.
+politeness here is not decoration: a scraper that hammers a small business's
+shared host is doing that business harm, and is the kind that gets a source
+blocked for everyone.
 
 Four mechanisms, each solving a different failure:
 

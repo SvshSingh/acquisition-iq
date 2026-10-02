@@ -21,13 +21,10 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from functools import lru_cache
-from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 
-from app.config import settings
 from app.pipeline.domains import find_website
 from app.pipeline.ingest import ingest_csv
 from app.pipeline.quality import assess
@@ -45,6 +42,7 @@ from app.schemas import (
     SearchResponse,
 )
 from app.scoring.engine import ENGINE_VERSION, score_many
+from app.store import CompanyFilters, get_store
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["companies"])
@@ -110,67 +108,8 @@ CRM_PRESETS: dict[str, dict[str, str]] = {
 }
 
 
-def _seed_path() -> Path:
-    configured = Path(settings.seed_dataset_path)
-    if configured.is_absolute() and configured.exists():
-        return configured
-    root = Path(__file__).resolve().parents[4]
-    for candidate in (root / "data" / "seed_glendale.json", root / configured.name):
-        if candidate.exists():
-            return candidate
-    return root / "data" / "seed_glendale.json"
-
-
-@lru_cache
-def load_dataset() -> tuple[dict[str, Any], list[Company]]:
-    """Read the committed snapshot once per process.
-
-    Cached deliberately: the file is a few hundred kilobytes of JSON and parsing
-    it per request would dominate the response time of every search.
-    """
-    path = _seed_path()
-    if not path.exists():
-        logger.error("seed dataset missing at %s", path)
-        return {"count": 0, "companies": []}, []
-
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    companies = [Company(**row) for row in payload.get("companies", [])]
-    logger.info("loaded %d companies from %s", len(companies), path.name)
-    return payload, companies
-
-
-def _matches(
-    company: Company,
-    *,
-    q: str | None,
-    industry: str | None,
-    city: str | None,
-    business_type: str | None,
-    has_employees: bool | None,
-    min_age: int | None,
-) -> bool:
-    if q:
-        needle = q.lower()
-        haystack = f"{company.name} {company.city or ''} {company.industry or ''}".lower()
-        if needle not in haystack:
-            return False
-    if industry and (company.industry or "").lower() != industry.lower():
-        return False
-    if city and (company.city or "").lower() != city.lower():
-        return False
-    if business_type and (company.business_type or "").lower() != business_type.lower():
-        return False
-    if has_employees is not None and company.has_employees is not has_employees:
-        return False
-    if min_age is not None:
-        year = company.founded_year
-        if year is None or (datetime.now(UTC).year - year) < min_age:
-            return False
-    return True
-
-
 @router.get("/companies", response_model=SearchResponse)
-def search_companies(
+async def search_companies(
     q: str | None = Query(default=None, description="Free-text match on name, city or trade"),
     industry: str | None = None,
     city: str | None = None,
@@ -187,13 +126,14 @@ def search_companies(
     see the module docstring for why.
     """
     started = time.perf_counter()
-    payload, companies = load_dataset()
+    store = get_store()
 
-    filtered = [
-        c
-        for c in companies
-        if _matches(
-            c,
+    # Filtering happens in the store, in SQL when Postgres is serving. Scoring
+    # stays here, in Python, on purpose: the engine is deterministic code under
+    # a golden-file test, and re-expressing it as SQL to push `min_score` down
+    # would mean two implementations of the judgement instead of one.
+    filtered = await store.search(
+        CompanyFilters(
             q=q,
             industry=industry,
             city=city,
@@ -201,29 +141,60 @@ def search_companies(
             has_employees=has_employees,
             min_age=min_age,
         )
-    ]
+    )
     scored = [s for s in score_many(filtered) if s.score.score >= min_score]
+    dataset = await store.meta()
 
     return SearchResponse(
         results=scored[offset : offset + limit],
         total=len(scored),
         took_ms=int((time.perf_counter() - started) * 1000),
         from_cache=True,
-        source=str(payload.get("market", {}).get("label", "seed snapshot")),
+        source=dataset.label,
     )
 
 
+@router.get("/companies/{company_id:path}/history")
+async def company_history(company_id: str) -> dict[str, Any]:
+    """Every score this company has been given, newest first.
+
+    A score that moves is information: a site that went stale, an owner who
+    finally listed an email. Each refresh records its result, so the movement
+    is something a user can look at rather than something that silently
+    overwrote the previous number. Empty when serving the snapshot, which keeps
+    no history by construction.
+
+    Declared before the catch-all company route below, which would otherwise
+    swallow the `/history` suffix as part of the id.
+    """
+    store = get_store()
+    if await store.get(company_id) is None:
+        raise HTTPException(status_code=404, detail=f"no company with id {company_id!r}")
+    records = await store.history(company_id)
+    return {
+        "company_id": company_id,
+        "history": [
+            {
+                "score": r.score,
+                "confidence": r.confidence,
+                "engine_version": r.engine_version,
+                "scored_at": r.scored_at.isoformat(),
+            }
+            for r in records
+        ],
+    }
+
+
 @router.get("/companies/{company_id:path}", response_model=ScoredCompany)
-def get_company(company_id: str) -> ScoredCompany:
-    _, companies = load_dataset()
-    for company in companies:
-        if company.id == company_id:
-            return score_many([company])[0]
-    raise HTTPException(status_code=404, detail=f"no company with id {company_id!r}")
+async def get_company(company_id: str) -> ScoredCompany:
+    company = await get_store().get(company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail=f"no company with id {company_id!r}")
+    return score_many([company])[0]
 
 
 @router.post("/companies/{company_id:path}/refresh", response_model=ScoredCompany)
-async def refresh_company(company_id: str) -> ScoredCompany:
+async def refresh_company(company_id: str, response: Response) -> ScoredCompany:
     """Re-fetch this company from source, re-validate, and re-score.
 
     This is the live path, and the reason the backend is a long-running
@@ -234,17 +205,22 @@ async def refresh_company(company_id: str) -> ScoredCompany:
     would have been an architecture decision justified by a feature that did not
     exist.
 
-    The committed snapshot is deliberately not written back to. A refresh
-    answers "what does this company look like right now", and quietly mutating
-    the shipped dataset would mean two people running the demo saw different
-    data with no way to tell why.
+    With Postgres serving, the result is written back: the company row is
+    updated, the crawl's raw output is kept beside it, and the score joins the
+    company's history. Work a user triggered is not thrown away when the
+    response is sent.
+
+    The committed snapshot, by contrast, is never written to. Quietly mutating
+    a shipped file would mean two people running the same build saw different
+    data with no way to tell why. The `X-Persisted` response header says which
+    of the two happened.
     """
-    _, companies = load_dataset()
-    company = next((c for c in companies if c.id == company_id), None)
+    store = get_store()
+    company = await store.get(company_id)
     if company is None:
         raise HTTPException(status_code=404, detail=f"no company with id {company_id!r}")
 
-    # A copy, so a failed or partial refresh cannot corrupt the served snapshot.
+    # A copy, so a failed or partial refresh cannot corrupt what is being served.
     working = company.model_copy(deep=True)
 
     async with PoliteClient() as client:
@@ -280,14 +256,17 @@ async def refresh_company(company_id: str) -> ScoredCompany:
     working.last_refreshed = datetime.now(UTC)
     working.data_quality, working.quality_issues = assess(working)
 
-    return score_many([working])[0]
+    scored = score_many([working])[0]
+    persisted = await store.save_refresh(scored)
+    response.headers["X-Persisted"] = "true" if persisted else "false"
+    return scored
 
 
 @router.post("/score-upload")
 async def score_upload(file: UploadFile = File(...)) -> dict[str, Any]:  # noqa: B008
     """Score a lead list the user brings in — the layer on top of any lead source.
 
-    A searcher exports from SaaSquatch, a CRM or a broker sheet, drops the CSV
+    A searcher exports from a lead tool, a CRM or a broker sheet, drops the CSV
     here, and gets it validated and acquisition-scored with the same explainable
     breakdown as the seed data. The point is workflow fit: they do not leave
     whatever produced the list, and they do not adopt a new tool to enrich it.
@@ -355,20 +334,22 @@ async def score_upload(file: UploadFile = File(...)) -> dict[str, Any]:  # noqa:
 
 
 @router.get("/meta")
-def meta() -> dict[str, Any]:
+async def meta() -> dict[str, Any]:
     """Everything the UI needs to render controls without hardcoding it.
 
     The filter options are derived from the data rather than declared here, so a
     dataset from a different market cannot leave the UI offering filters that
     match nothing.
     """
-    payload, companies = load_dataset()
+    store = get_store()
+    dataset = await store.meta()
     weights = FactorWeights()
     return {
-        "market": payload.get("market", {}),
-        "generated_at": payload.get("generated_at"),
-        "sources": payload.get("sources", []),
-        "count": len(companies),
+        "market": dataset.market,
+        "generated_at": dataset.generated_at,
+        "sources": dataset.sources,
+        "count": dataset.count,
+        "storage": store.name,
         "engine_version": ENGINE_VERSION,
         "factors": [
             {
@@ -381,16 +362,16 @@ def meta() -> dict[str, Any]:
         ],
         "buy_box": BuyBox().model_dump(),
         "filters": {
-            "industry": sorted({c.industry for c in companies if c.industry}),
-            "city": sorted({c.city for c in companies if c.city}),
-            "business_type": sorted({c.business_type for c in companies if c.business_type}),
+            "industry": dataset.industries,
+            "city": dataset.cities,
+            "business_type": dataset.business_types,
         },
         "crm_presets": sorted(CRM_PRESETS),
     }
 
 
 @router.get("/export")
-def export_csv(
+async def export_csv(
     ids: str | None = Query(default=None, description="Comma-separated company ids"),
     preset: Literal["generic", "hubspot", "salesforce"] = "generic",
     weights_json: str | None = Query(default=None, alias="weights"),
@@ -402,9 +383,8 @@ def export_csv(
     file in the local codepage, which mangles every accented name. A file that
     looks broken on opening is not an export.
     """
-    _, companies = load_dataset()
-    wanted = {i.strip() for i in ids.split(",")} if ids else None
-    selected = [c for c in companies if wanted is None or c.id in wanted]
+    wanted = {i.strip() for i in ids.split(",") if i.strip()} if ids else None
+    selected = await get_store().get_many(wanted)
 
     weights = FactorWeights()
     if weights_json:
@@ -453,4 +433,4 @@ def export_csv(
     )
 
 
-__all__ = ["CRM_PRESETS", "load_dataset", "router"]
+__all__ = ["CRM_PRESETS", "router"]

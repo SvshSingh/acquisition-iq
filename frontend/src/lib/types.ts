@@ -88,6 +88,8 @@ export interface Company {
   sibling_location_count: number | null;
   source: string;
   source_url: string | null;
+  /** When "refresh from source" last ran for this company, if it ever has. */
+  last_refreshed?: string | null;
   /** How complete this record is, scored separately from acquisition fit.
    *  A thin record on a great business must not be marked down for our
    *  ignorance, so the two never mix. */
@@ -130,11 +132,25 @@ export interface FactorMeta {
   default_weight: number;
 }
 
+export interface ScoreHistoryEntry {
+  score: number;
+  confidence: Confidence;
+  engine_version: string;
+  scored_at: string;
+}
+
+export interface ScoreHistoryResponse {
+  company_id: string;
+  history: ScoreHistoryEntry[];
+}
+
 export interface Meta {
   market: { key?: string; label?: string; state?: string };
   generated_at: string | null;
   sources: string[];
   count: number;
+  /** Which store is answering reads: "postgres" or "snapshot". */
+  storage?: string;
   engine_version: string;
   factors: FactorMeta[];
   buy_box: Record<string, number>;

@@ -45,11 +45,11 @@ class Market:
         return city.strip().upper() in {c.upper() for c in self.core_cities}
 
 
-# Caprae is headquartered in Glendale. Running the primary market on their own
-# doorstep is deliberate: every row in the demo is a business the reader could
-# drive past, which makes the scores arguable in a way that an anonymous metro
-# never is. The handbook does not ask for any particular geography — this is our
-# choice, and the README says so rather than implying otherwise.
+# The seed market. One compact metro rather than a state-wide sample, on
+# purpose: every row is a business someone could drive past, which makes the
+# scores arguable in a way that an anonymous spread of records never is. It is
+# also covered by a licence register good enough to carry the scoring, which is
+# the real constraint on where a market can be collected.
 GLENDALE = Market(
     key="glendale",
     label="Glendale-Pasadena-Burbank, CA",

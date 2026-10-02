@@ -73,7 +73,7 @@ function capitalise(word: string): string {
 
   // A hyphen or slash always starts a new word: Smith-Jones, Heating/Cooling.
   out = out.replace(
-    /([\-/])([a-z])/g,
+    /([-/])([a-z])/g,
     (_, sep: string, letter: string) => sep + letter.toUpperCase(),
   );
 

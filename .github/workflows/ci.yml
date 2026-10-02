@@ -16,6 +16,25 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # A real Postgres, because the storage tests are the ones that prove the SQL
+    # path returns what the in-memory path does. They skip without a database,
+    # which is right on a laptop and would be a silent hole here.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aiq
+          POSTGRES_PASSWORD: aiq
+          POSTGRES_DB: aiq
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aiq -d aiq"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://aiq:aiq@localhost:5432/aiq
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -36,9 +55,11 @@ jobs:
         working-directory: backend
         run: mypy app scripts
 
+      # -rs lists every skipped test with its reason, so a storage test that
+      # quietly stopped running shows up in the log instead of in production.
       - name: Test
         working-directory: backend
-        run: pytest -q
+        run: pytest -q -rs
 
   frontend:
     runs-on: ubuntu-latest
@@ -80,8 +101,8 @@ jobs:
         run: npm run build
 
   compose:
-    # The claim in the README is that a grader can run one command and get the
-    # whole system. That claim is worth nothing unless something checks it.
+    # The claim in the README is that one command brings up the whole system.
+    # That claim is worth nothing unless something checks it.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -99,6 +120,17 @@ jobs:
           echo "api never became healthy"
           docker compose logs --no-color
           exit 1
+
+      # Compose runs with a database, so the API must be serving from it: the
+      # schema migrated, the snapshot loaded, reads going through SQL. A green
+      # health check alone would not show that, since the snapshot fallback is
+      # healthy too.
+      - name: The API is serving from Postgres, not the fallback
+        run: |
+          health=$(curl -sf http://localhost:8080/api/health)
+          echo "$health"
+          echo "$health" | grep -q '"storage":"postgres"'
+          echo "$health" | grep -q '"database":"ok"'
 
       - name: Exercise the API through the proxy
         run: |

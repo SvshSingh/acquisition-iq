@@ -23,7 +23,21 @@ services:
       # frontend URL changes.
       - key: CORS_ORIGINS
         value: https://frontend-orcin-five-88.vercel.app
-      # Unset on the free tier: the cache falls back to Postgres, which is the
-      # path this deployment runs on by design.
+      # The Supabase connection string. `sync: false` means the value is set in
+      # the Render dashboard and never lives in this file or in git.
+      #
+      # Use the *Session pooler* string (host ...pooler.supabase.com, port 5432).
+      # Supabase's direct connection is IPv6-only and Render's network is IPv4,
+      # so the direct string resolves and then cannot connect; the pooler is the
+      # IPv4 path. The transaction pooler (port 6543) also works — the app
+      # detects it and disables prepared-statement caching — but the session
+      # pooler suits a long-running container with its own pool.
+      #
+      # Left unset, the service runs from the committed snapshot and
+      # /api/health reports `"database": "not configured"`.
+      - key: DATABASE_URL
+        sync: false
+      # Unset on the free tier: the HTTP cache uses its Postgres table when a
+      # database is configured, and runs uncached when one is not.
       - key: REDIS_URL
         value: ""

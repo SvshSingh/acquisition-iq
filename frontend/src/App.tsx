@@ -182,7 +182,7 @@ export default function App() {
             onClick={() => fileInput.current?.click()}
             disabled={upload.isPending}
             className="rounded border border-[var(--color-rule-strong)] px-2 py-1 font-medium text-[var(--color-ink)] hover:bg-[var(--color-surface)] disabled:cursor-wait disabled:opacity-60"
-            title="Score your own lead list — a CSV from SaaSquatch, a CRM, or a broker sheet"
+            title="Score your own lead list: a CSV from a lead tool, a CRM, or a broker sheet"
           >
             {upload.isPending ? "Scoring…" : "Import CSV"}
           </button>
