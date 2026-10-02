@@ -230,3 +230,41 @@ def test_upload_with_no_scorable_rows_is_422(client: TestClient):
         files={"file": ("bad.csv", "Colour,Shape\nred,square\n", "text/csv")},
     )
     assert resp.status_code == 422
+
+
+# --------------------------------------------------------------------------- #
+# storage reporting and history
+# --------------------------------------------------------------------------- #
+
+def test_health_says_where_the_data_is_coming_from(client: TestClient):
+    """With no database configured the service is healthy and says so plainly:
+    serving the snapshot is this configuration working, not a fault."""
+    body = client.get("/api/health").json()
+    assert body["storage"] == "snapshot"
+    assert body["database"] == "not configured"
+    assert body["status"] == "ok"
+
+
+def test_meta_names_the_store_answering_reads(client: TestClient):
+    assert client.get("/api/meta").json()["storage"] == "snapshot"
+
+
+def test_refresh_reports_that_the_snapshot_was_not_written_to(client: TestClient):
+    cid = client.get("/api/companies", params={"limit": 1}).json()["results"][0]["company"]["id"]
+    resp = client.post(f"/api/companies/{cid}/refresh")
+    assert resp.status_code == 200
+    assert resp.headers["x-persisted"] == "false"
+
+
+def test_history_is_empty_on_the_snapshot_and_404_for_an_unknown_company(client: TestClient):
+    cid = client.get("/api/companies", params={"limit": 1}).json()["results"][0]["company"]["id"]
+    body = client.get(f"/api/companies/{cid}/history").json()
+    assert body == {"company_id": cid, "history": []}
+    assert client.get("/api/companies/nope/history").status_code == 404
+
+
+def test_the_history_route_does_not_shadow_the_company_route(client: TestClient):
+    """Company ids are matched as a path, so the catch-all would swallow
+    `/history` as part of an id if the routes were declared the other way round."""
+    cid = client.get("/api/companies", params={"limit": 1}).json()["results"][0]["company"]["id"]
+    assert client.get(f"/api/companies/{cid}").json()["company"]["id"] == cid

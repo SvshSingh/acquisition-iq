@@ -3,20 +3,22 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 
-from app.config import settings
 from app.db.models import Base
+from app.db.session import connection_spec
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# The URL comes from the same settings object the app uses, so a migration can
-# never be run against a different database than the one the code talks to.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# The connection comes from the same normalisation the app uses, so a migration
+# can never be run against a different database than the one the code talks to,
+# and a hosted URL (`postgres://...?sslmode=require`, a PgBouncer port) gets the
+# same driver arguments here as it does at runtime.
+_spec = connection_spec()
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -47,7 +49,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = _spec.url.render_as_string(hide_password=False)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -72,9 +74,9 @@ async def run_async_migrations() -> None:
 
     """
 
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        _spec.url,
+        connect_args=_spec.connect_args,
         poolclass=pool.NullPool,
     )
 

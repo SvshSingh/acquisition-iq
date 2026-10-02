@@ -40,16 +40,53 @@ class Base(DeclarativeBase):
     knowing the defaults."""
 
 
+class Market(Base):
+    """A collected market — one run of the collector over one geography.
+
+    The snapshot file carried this as top-level JSON (`market`, `generated_at`,
+    `sources`). It needs a home in the database for the same reason it needed
+    one in the file: the UI names the market it is showing, and the attribution
+    a source's licence requires travels with the data, not with the code.
+    """
+
+    __tablename__ = "markets"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    state: Mapped[str | None] = mapped_column(String(64))
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Source descriptors exactly as the collector emitted them: name, URL,
+    # licence, attribution. Read whole, never queried into.
+    sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class Company(Base):
     __tablename__ = "companies"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(512), nullable=False)
 
+    # Nullable: a company brought in by a user's own list belongs to no
+    # collected market, and that is a fact about it rather than a gap.
+    market_key: Mapped[str | None] = mapped_column(
+        ForeignKey("markets.key", ondelete="SET NULL"), index=True
+    )
+
     # Normalised to lowercase, no scheme, no www. The dedupe pipeline treats a
     # shared domain as strong evidence two rows are the same business.
     domain: Mapped[str | None] = mapped_column(String(255), index=True)
     website: Mapped[str | None] = mapped_column(Text)
+    # How the website was learned, and the proof. An inferred domain without its
+    # evidence is a guess, so the two are stored or dropped together.
+    website_source: Mapped[str | None] = mapped_column(String(64))
+    website_evidence: Mapped[str | None] = mapped_column(Text)
 
     industry: Mapped[str | None] = mapped_column(String(128), index=True)
     naics: Mapped[str | None] = mapped_column(String(8), index=True)
@@ -65,9 +102,21 @@ class Company(Base):
     employee_count_is_estimate: Mapped[bool] = mapped_column(Boolean, default=True)
     revenue_usd: Mapped[float | None] = mapped_column(Float)
     revenue_is_estimate: Mapped[bool] = mapped_column(Boolean, default=True)
-    founded_year: Mapped[int | None] = mapped_column(Integer)
+    founded_year: Mapped[int | None] = mapped_column(Integer, index=True)
+
+    # Facts as filed with the licensing board. These are columns rather than
+    # JSONB because the API filters on two of them and the scoring engine reads
+    # all of them — they are the strongest evidence in the dataset.
+    business_type: Mapped[str | None] = mapped_column(String(64), index=True)
+    has_employees: Mapped[bool | None] = mapped_column(Boolean)
+    licence_number: Mapped[str | None] = mapped_column(String(32), index=True)
+    licence_issued: Mapped[date | None] = mapped_column(Date)
+    licence_classifications: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, nullable=False
+    )
 
     peer_count_in_niche: Mapped[int | None] = mapped_column(Integer)
+    sibling_location_count: Mapped[int | None] = mapped_column(Integer)
 
     # WebSignals, serialised. See the module docstring for why this is not columns.
     web: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
@@ -99,9 +148,10 @@ class Company(Base):
             "data_quality IS NULL OR (data_quality >= 0 AND data_quality <= 100)",
             name="ck_companies_data_quality_range",
         ),
-        # Trigram index for fuzzy name matching in the dedupe pass. Without it
-        # similarity() over the whole table is a sequential scan per candidate,
-        # which is what turns dedupe from O(n) into something much worse.
+        # Trigram index on the name. The search box matches with an unanchored
+        # `ILIKE '%term%'`, which a B-tree cannot serve at all and this can
+        # (verified with EXPLAIN: a bitmap scan on this index). It is also what
+        # `similarity()` needs if fuzzy dedupe is ever pushed into SQL.
         Index(
             "ix_companies_name_trgm",
             "name",
@@ -221,6 +271,7 @@ __all__ = [
     "Company",
     "Contact",
     "HttpCacheEntry",
+    "Market",
     "RawPayload",
     "Score",
 ]

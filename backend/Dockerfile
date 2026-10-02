@@ -45,4 +45,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status==200 else 1)"
 
 # Shell form so $PORT expands — Render assigns the port at runtime.
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+#
+# With a database configured, bring its schema to head before serving, so a
+# deploy that ships a migration cannot run new code against an old schema. The
+# migration is allowed to fail without stopping the container: if the database
+# is unreachable the API falls back to the snapshot and says so on /api/health,
+# which is a better outcome than a crash loop. With no DATABASE_URL this is a
+# no-op and the image runs standalone exactly as before.
+CMD if [ -n "$DATABASE_URL" ]; then         alembic upgrade head || echo "WARNING: migration failed; starting anyway (see /api/health)";     fi;     exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}

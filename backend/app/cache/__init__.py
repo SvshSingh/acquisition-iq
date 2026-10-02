@@ -10,7 +10,7 @@ import logging
 from app.cache.backends import FallbackCache, PostgresCache, RedisCache
 from app.cache.base import Cache, NullCache, http_cache_key
 from app.config import settings
-from app.db.session import get_sessionmaker
+from app.db.session import database_configured, get_sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,19 @@ def build_cache() -> Cache:
     cache that always misses and never raises, so the worst outcome of having no
     storage at all is doing the work twice.
     """
-    durable = FallbackCache(primary=PostgresCache(get_sessionmaker()), standby=NullCache())
+    durable: Cache
+    if database_configured():
+        durable = FallbackCache(primary=PostgresCache(get_sessionmaker()), standby=NullCache())
+    else:
+        # No database is a configuration, not a fault, so there is nothing to
+        # fall back *from*: go straight to the cache that always misses rather
+        # than attempting a connection that cannot exist on every lookup.
+        durable = NullCache()
     if not settings.redis_url:
-        logger.info("No REDIS_URL configured; using the Postgres-backed cache.")
+        logger.info(
+            "No REDIS_URL configured; using the %s cache.",
+            "Postgres-backed" if database_configured() else "null (uncached)",
+        )
         return durable
     return FallbackCache(primary=RedisCache(settings.redis_url), standby=durable)
 

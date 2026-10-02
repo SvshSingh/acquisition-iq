@@ -4,10 +4,10 @@
 #
 # then open http://localhost:8080
 #
-# The demo serves the committed snapshot, so Postgres is not on the request
-# path. It is here because the collector and the cache fallback use it, and
-# because a grader should be able to exercise those without provisioning
-# anything.
+# Postgres is the serving path here. On first start the API migrates the schema
+# and loads the committed snapshot into the empty database; after that every
+# search is a SQL query and every "refresh from source" is written back.
+# `curl localhost:8000/api/health` reports `"storage": "postgres"`.
 
 services:
   db:
@@ -31,9 +31,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: postgresql+asyncpg://aiq:aiq@db:5432/aiq
-      # No REDIS_URL: the cache falls back to Postgres, which is the path the
-      # deployed demo runs on. See ARCHITECTURE.md.
+      DATABASE_URL: postgresql://aiq:aiq@db:5432/aiq
+      # No REDIS_URL: the HTTP cache uses its Postgres table. See ARCHITECTURE.md.
       CORS_ORIGINS: http://localhost:8080,http://localhost:5173
       ENVIRONMENT: production
       DEBUG: "false"

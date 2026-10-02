@@ -12,8 +12,19 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
-    # Storage — Supabase Postgres in production, local container in development.
-    database_url: str = "postgresql+asyncpg://aiq:aiq@localhost:5432/aiq"
+    # Storage. Empty means "no database": the API serves the committed snapshot
+    # and nothing tries to open a socket. Set it and Postgres becomes the serving
+    # path — Supabase in production, the compose container locally.
+    #
+    # The default used to be a localhost URL, which made "no database configured"
+    # indistinguishable from "database configured and down", and is why a refresh
+    # once died with ConnectionRefusedError on a host that never had one. Absence
+    # is now a state the code can see.
+    #
+    # Any Postgres URL form is accepted (`postgres://`, `postgresql://`, with or
+    # without a driver) because that is what dashboards hand out; see
+    # `app.db.session.connection_spec` for how it is normalised.
+    database_url: str = ""
 
     # Cache — Upstash Redis in production. Empty string disables Redis and the
     # cache transparently falls back to the Postgres-backed cache table.
